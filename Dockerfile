@@ -1,5 +1,5 @@
 # Imagem da API (o front-end é publicado no Vercel)
-FROM node:24-alpine
+FROM node:24-slim
 
 WORKDIR /app
 ENV NODE_ENV=production
