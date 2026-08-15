@@ -2,13 +2,36 @@ import { useState } from 'react';
 import { DatabaseZap, RefreshCw } from 'lucide-react';
 import { Header, type Tab } from './components/layout/Header';
 import { MobileNav } from './components/layout/MobileNav';
+import { LoginScreen } from './components/auth/LoginScreen';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { ManageView } from './components/manage/ManageView';
 import { SettingsPanel } from './components/settings/SettingsPanel';
-import { useData } from './store/DataContext';
+import { DataProvider, useData } from './store/DataContext';
+import { useAuth } from './store/AuthContext';
 import { btnPrimary } from './components/ui/controls';
 
 export default function App() {
+  const { status } = useAuth();
+
+  if (status === 'checking') {
+    return (
+      <div className="flex min-h-dvh items-center justify-center">
+        <span className="h-9 w-9 animate-spin rounded-full border-2 border-line border-t-accent" aria-hidden />
+      </div>
+    );
+  }
+
+  if (status === 'locked') return <LoginScreen />;
+
+  // Os dados só são carregados depois do login
+  return (
+    <DataProvider>
+      <AppShell />
+    </DataProvider>
+  );
+}
+
+function AppShell() {
   const [tab, setTab] = useState<Tab>('dashboard');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { status, errorMessage, retry } = useData();
@@ -30,8 +53,7 @@ export default function App() {
               <h2 className="text-lg font-semibold">Sem conexão com o banco</h2>
               <p className="mt-1 text-sm text-muted">{errorMessage}</p>
               <p className="mt-2 text-xs text-faint">
-                Confira se o projeto está rodando com <code className="rounded bg-card2 px-1.5 py-0.5">npm run dev</code>{' '}
-                e se o serviço do PostgreSQL está ativo.
+                Confira se a API está no ar e se o serviço do PostgreSQL está ativo.
               </p>
             </div>
             <button type="button" className={btnPrimary} onClick={retry}>

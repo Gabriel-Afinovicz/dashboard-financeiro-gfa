@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+.vercel
+.env
+.env.*
+src
+public
+index.html
+*.md
+*.ps1
+vite.config.ts

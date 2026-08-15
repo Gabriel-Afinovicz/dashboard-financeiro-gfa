@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import type pg from 'pg';
 import { pool } from './db';
+import { login, requireAuth } from './auth';
 import { isUuid, parseInvestment, parseTransaction } from './validate';
 
 export const router = Router();
@@ -48,10 +49,22 @@ async function fetchData(db: Db) {
   };
 }
 
-// ---------- Saúde ----------
+// ---------- Rotas públicas ----------
+
+router.post('/login', login);
+
+/** Usado pelo monitoramento do servidor; não expõe nenhum dado. */
 router.get('/health', async (_req, res) => {
-  const version = await pool.query('SELECT version()');
-  res.json({ ok: true, db: 'conectado', version: version.rows[0].version as string });
+  await pool.query('SELECT 1');
+  res.json({ ok: true, db: 'conectado' });
+});
+
+// ---------- Daqui para baixo, tudo exige token de acesso ----------
+router.use(requireAuth);
+
+/** Confirma para o front que o token guardado no navegador continua valendo. */
+router.get('/session', (_req, res) => {
+  res.json({ ok: true });
 });
 
 // ---------- Dados completos ----------

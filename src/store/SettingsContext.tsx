@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { FontOption, Settings } from '../types';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '../lib/storage';
 import { api } from '../lib/api';
+import { useAuth } from './AuthContext';
 import { contrastText } from '../lib/colors';
 import { formatBRL, formatBRLCompact } from '../lib/format';
 
@@ -43,6 +44,8 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const hydratedFromDb = useRef(false);
+  const { status: authStatus } = useAuth();
+  const authenticated = authStatus === 'unlocked';
 
   const resolvedAccent = useMemo(() => {
     if (settings.accent === 'auto') return settings.theme === 'dark' ? '#fafafa' : '#0a0a0a';
@@ -51,6 +54,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   // Carrega as configurações salvas no banco (o localStorage cobre o primeiro render sem piscar)
   useEffect(() => {
+    if (!authenticated) return;
     let cancelled = false;
     api
       .getSettings()
@@ -68,7 +72,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authenticated]);
 
   useEffect(() => {
     saveSettings(settings);
@@ -80,13 +84,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     root.style.fontSize = `${16 * settings.fontScale}px`;
     root.classList.toggle('no-anim', !settings.animations);
 
-    // Persiste no banco com debounce (após a hidratação inicial)
-    if (!hydratedFromDb.current) return;
+    // Persiste no banco com debounce (após a hidratação inicial e apenas com sessão ativa)
+    if (!hydratedFromDb.current || !authenticated) return;
     const timer = setTimeout(() => {
       void api.saveSettings(settings).catch(() => {});
     }, 500);
     return () => clearTimeout(timer);
-  }, [settings, resolvedAccent]);
+  }, [settings, resolvedAccent, authenticated]);
 
   const chartColors = useMemo<ChartColors>(() => {
     const dark = settings.theme === 'dark';

@@ -2,18 +2,18 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App';
+import { AuthProvider } from './store/AuthContext';
 import { SettingsProvider } from './store/SettingsContext';
-import { DataProvider } from './store/DataContext';
 import { ToastProvider } from './store/ToastContext';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <SettingsProvider>
-      <DataProvider>
+    <AuthProvider>
+      <SettingsProvider>
         <ToastProvider>
           <App />
         </ToastProvider>
-      </DataProvider>
-    </SettingsProvider>
+      </SettingsProvider>
+    </AuthProvider>
   </StrictMode>,
 );

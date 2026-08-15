@@ -1,4 +1,5 @@
 import type { Investment, Settings, Transaction } from '../types';
+import { getToken, setToken } from './authToken';
 
 export type TransactionInput = Omit<Transaction, 'id' | 'createdAt'>;
 export type InvestmentInput = Omit<Investment, 'id' | 'createdAt'>;
@@ -30,14 +31,19 @@ export class ApiError extends Error {
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getToken();
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/api${path}`, {
-      headers: { 'Content-Type': 'application/json' },
       ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options?.headers,
+      },
     });
   } catch {
-    throw new ApiError('Sem conexão com a API local. Rode "npm run dev" e verifique o PostgreSQL.');
+    throw new ApiError('Sem conexão com a API. Verifique se o servidor e o PostgreSQL estão no ar.');
   }
   if (!res.ok) {
     let message = `Erro ${res.status} na API.`;
@@ -47,13 +53,18 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     } catch {
       // corpo não-JSON; mantém a mensagem padrão
     }
+    // Token inválido ou expirado: derruba a sessão e volta para a tela de acesso
+    if (res.status === 401) setToken(null);
     throw new ApiError(message, res.status);
   }
   return (await res.json()) as T;
 }
 
 export const api = {
-  health: () => request<{ ok: boolean; db: string; version: string }>('/health'),
+  health: () => request<{ ok: boolean; db: string }>('/health'),
+  login: (password: string) =>
+    request<{ token: string }>('/login', { method: 'POST', body: JSON.stringify({ password }) }),
+  session: () => request<{ ok: true }>('/session'),
   getData: () => request<RemoteData>('/data'),
   replaceData: (payload: ReplacePayload) =>
     request<RemoteData>('/data/replace', { method: 'POST', body: JSON.stringify(payload) }),

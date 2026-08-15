@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { DataStore, Investment, Transaction } from '../types';
 import { api, type InvestmentInput, type TransactionInput } from '../lib/api';
 import { loadData as loadLocalData } from '../lib/storage';
@@ -34,13 +34,12 @@ interface LocalStore {
 
 const EMPTY: LocalStore = { transactions: [], investments: [], sampleData: false };
 
-// Evita inicialização dupla no StrictMode/HMR
-let bootstrapStarted = false;
-
 export function DataProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<LocalStore>(EMPTY);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Evita a inicialização dupla do StrictMode (o ref sobrevive ao remonte simulado)
+  const bootstrapped = useRef(false);
 
   const load = useCallback(async () => {
     setStatus('loading');
@@ -71,8 +70,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (bootstrapStarted) return;
-    bootstrapStarted = true;
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
     void load();
   }, [load]);
 

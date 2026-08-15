@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Database, Download, Paintbrush, RotateCcw, Trash2, Upload, Wallet, X } from 'lucide-react';
+import { AlertTriangle, Database, Download, LogOut, Paintbrush, RotateCcw, ShieldCheck, Trash2, Upload, Wallet, X } from 'lucide-react';
 import type { DataStore, FontOption, ThemeMode } from '../../types';
 import { FONT_LABELS, useSettings } from '../../store/SettingsContext';
 import { useData } from '../../store/DataContext';
+import { useAuth } from '../../store/AuthContext';
 import { useToast } from '../../store/ToastContext';
 import { currencyToCents, maskCurrency, toISO } from '../../lib/format';
 import { Field, MoneyInput, Segmented, SelectInput, Switch, btnGhost, btnIcon } from '../ui/controls';
@@ -19,6 +20,7 @@ const ACCENT_PRESETS: { value: string; label: string }[] = [
 export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { settings, update, resolvedAccent } = useSettings();
   const { transactions, investments, sampleData, replaceAll, clearAll, loadSample } = useData();
+  const { logout } = useAuth();
   const { push } = useToast();
 
   const [initialBalance, setInitialBalance] = useState(() => maskCurrency(String(settings.initialBalanceCents || '')));
@@ -227,8 +229,8 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               <Database className="h-3.5 w-3.5" /> Dados
             </h3>
             <p className="text-xs text-faint">
-              Os dados ficam salvos no PostgreSQL local (banco dashboard_financeiro). Use o backup em JSON para
-              guardar uma cópia extra ou transferir para outra máquina.
+              Os dados ficam salvos no seu banco PostgreSQL privado. Use o backup em JSON para guardar uma cópia
+              extra ou transferir para outro ambiente.
             </p>
 
             <div className="grid grid-cols-2 gap-2">
@@ -303,10 +305,30 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               </button>
             )}
           </section>
+
+          {/* Acesso */}
+          <section className="space-y-3">
+            <h3 className="flex items-center gap-2 text-xs font-semibold tracking-wider text-faint uppercase">
+              <ShieldCheck className="h-3.5 w-3.5" /> Acesso
+            </h3>
+            <p className="text-xs text-faint">
+              O dashboard é privado: sem a senha, nada é exibido. A sessão neste navegador vale 30 dias.
+            </p>
+            <button
+              type="button"
+              className={`${btnGhost} w-full`}
+              onClick={() => {
+                onClose();
+                logout();
+              }}
+            >
+              <LogOut className="h-4 w-4" /> Sair desta sessão
+            </button>
+          </section>
         </div>
 
         <footer className="border-t border-line px-5 py-3 text-center text-xs text-faint">
-          Dashboard Financeiro · v0.2 · PostgreSQL local
+          Dashboard Financeiro · v0.3 · PostgreSQL privado
         </footer>
       </aside>
     </>
