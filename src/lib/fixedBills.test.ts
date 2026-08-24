@@ -1,19 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { FixedBill } from '../types';
 import { accountBalanceCents, monthlyAggregates } from './calc';
-import { expandFixedBills, mergeWithFixedBills, occurrenceDate } from './fixedBills';
+import { expandFixedBills, getPendingFixedBillConfirmations, mergeWithFixedBills, occurrenceDate } from './fixedBills';
 
 function bill(partial: Partial<FixedBill>): FixedBill {
   return {
-    id: partial.id ?? 'bill-1',
-    description: partial.description ?? 'Netflix',
-    amountCents: partial.amountCents ?? 5590,
-    dayOfMonth: partial.dayOfMonth ?? 10,
-    category: partial.category ?? 'Assinaturas',
-    method: partial.method ?? 'cartao_credito',
-    active: partial.active ?? true,
-    startsOn: partial.startsOn ?? '2026-06-01',
-    createdAt: partial.createdAt ?? '2026-06-01T00:00:00.000Z',
+    id: 'bill-1',
+    description: 'Netflix',
+    amountCents: 5590,
+    dayOfMonth: 10,
+    category: 'Assinaturas',
+    method: 'cartao_credito',
+    active: true,
+    startsOn: '2026-06-01',
+    createdAt: '2026-06-01T00:00:00.000Z',
+    ...partial,
   };
 }
 
@@ -56,5 +57,36 @@ describe('expansão de contas fixas', () => {
     expect(aug.expenseCents).toBe(15000);
     expect(accountBalanceCents(ledger, 0)).toBe(-15000);
     expect(fixed).toHaveLength(1);
+  });
+
+  it('detecta pendência de confirmação de conta em dólar quando o vencimento já passou', () => {
+    const usdBill = bill({
+      id: 'usd-1',
+      description: 'Claude',
+      currency: 'USD',
+      amountCentsUSD: 2000,
+      dayOfMonth: 1,
+      startsOn: '2026-08-01',
+    });
+    const pending = getPendingFixedBillConfirmations([usdBill], new Date(2026, 7, 10));
+    expect(pending).toHaveLength(1);
+    expect(pending[0].bill.description).toBe('Claude');
+  });
+
+  it('respeita confirmação manual em R$ gravada no mês', () => {
+    const usdBill = bill({
+      id: 'usd-1',
+      description: 'Claude',
+      currency: 'USD',
+      amountCentsUSD: 2000,
+      dayOfMonth: 1,
+      startsOn: '2026-08-01',
+      confirmations: { '2026-08': 11680 },
+    });
+    const pending = getPendingFixedBillConfirmations([usdBill], new Date(2026, 7, 10));
+    expect(pending).toHaveLength(0); // Já confirmado
+
+    const expanded = expandFixedBills([usdBill], new Date(2026, 7, 10));
+    expect(expanded[0].amountCents).toBe(11680); // Usa o valor exato confirmado
   });
 });

@@ -58,6 +58,8 @@ export interface FixedBill {
   currency?: 'BRL' | 'USD';
   /** Valor original em centavos de Dólar quando currency === 'USD' (ex.: 2000 para $ 20,00). */
   amountCentsUSD?: number;
+  /** Confirmações de valor real em R$ por mês ('yyyy-mm' -> centavos em BRL). */
+  confirmations?: Record<string, number>;
   /** Dia do mês em que a fatura cai (1–31). Meses curtos usam o último dia. */
   dayOfMonth: number;
   category: string;

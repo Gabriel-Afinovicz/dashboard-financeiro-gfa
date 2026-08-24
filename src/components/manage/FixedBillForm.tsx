@@ -29,6 +29,7 @@ export const FixedBillForm = forwardRef<HTMLElement, Props>(function FixedBillFo
   const [description, setDescription] = useState('');
   const [currency, setCurrency] = useState<'BRL' | 'USD'>('BRL');
   const [amount, setAmount] = useState('');
+  const [confirmedBrlAmount, setConfirmedBrlAmount] = useState('');
   const [dayOfMonth, setDayOfMonth] = useState('10');
   const [category, setCategory] = useState<string>('Contas');
   const [method, setMethod] = useState<PaymentMethod>('boleto');
@@ -50,8 +51,16 @@ export const FixedBillForm = forwardRef<HTMLElement, Props>(function FixedBillFo
     setCurrency(editing.currency ?? 'BRL');
     if (editing.currency === 'USD' && editing.amountCentsUSD) {
       setAmount(maskCurrency(String(editing.amountCentsUSD)));
+      const curMonthKey = todayISO().slice(0, 7);
+      const existingConfirmed = editing.confirmations?.[curMonthKey];
+      if (existingConfirmed) {
+        setConfirmedBrlAmount(maskCurrency(String(existingConfirmed)));
+      } else {
+        setConfirmedBrlAmount('');
+      }
     } else {
       setAmount(maskCurrency(String(editing.amountCents)));
+      setConfirmedBrlAmount('');
     }
     setDayOfMonth(String(editing.dayOfMonth));
     setCategory(editing.category);
@@ -63,6 +72,7 @@ export const FixedBillForm = forwardRef<HTMLElement, Props>(function FixedBillFo
     setDescription('');
     setCurrency('BRL');
     setAmount('');
+    setConfirmedBrlAmount('');
     setDayOfMonth('10');
     setCategory('Contas');
     setMethod('boleto');
@@ -85,11 +95,21 @@ export const FixedBillForm = forwardRef<HTMLElement, Props>(function FixedBillFo
     const amountCentsUSD = isUSD ? rawCents : undefined;
     const amountCents = isUSD ? Math.round(rawCents * effectiveRate) : rawCents;
 
+    let confirmations = editing?.confirmations;
+    if (isUSD && confirmedBrlAmount) {
+      const realCents = currencyToCents(confirmedBrlAmount);
+      if (realCents > 0) {
+        const curMonthKey = todayISO().slice(0, 7);
+        confirmations = { ...(confirmations ?? {}), [curMonthKey]: realCents };
+      }
+    }
+
     const input = {
       description: values.description,
       amountCents,
       currency,
       amountCentsUSD,
+      confirmations,
       dayOfMonth: Number(dayOfMonth),
       category,
       method,
@@ -161,6 +181,12 @@ export const FixedBillForm = forwardRef<HTMLElement, Props>(function FixedBillFo
           >
             <MoneyInput value={amount} onChange={setAmount} invalid={!!errors.amount} />
           </Field>
+
+          {currency === 'USD' && (
+            <Field label="Valor real no banco (R$)" hint="Opcional. Exato do extrato.">
+              <MoneyInput value={confirmedBrlAmount} onChange={setConfirmedBrlAmount} placeholder="116,80" />
+            </Field>
+          )}
 
           <Field
             label="Dia da fatura"

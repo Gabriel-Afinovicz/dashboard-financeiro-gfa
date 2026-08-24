@@ -9,9 +9,17 @@ export function occurrenceDate(year: number, monthIndex: number, dayOfMonth: num
   return toISO(new Date(year, monthIndex, day));
 }
 
+export interface PendingConfirmation {
+  bill: FixedBill;
+  monthKey: string;
+  dueDate: string;
+  projectedAmountCents: number;
+}
+
 /**
  * Gera uma despesa virtual por mês, do início da conta até o mês atual.
- * Se a conta for em dólar, o valor em centavos de BRL é estimado com base na cotação do dia de ocorrência (ratesMap) ou usdRate padrão.
+ * Se houver confirmação manual em R$ para o mês (bill.confirmations[monthKey]), ela é usada diretamente.
+ * Senão, se a conta for em dólar, o valor em centavos de BRL é estimado com base na cotação do dia de ocorrência (ratesMap) ou usdRate padrão.
  */
 export function expandFixedBills(
   bills: FixedBill[],
@@ -31,12 +39,17 @@ export function expandFixedBills(
 
     while (year < endYear || (year === endYear && month <= endMonth)) {
       const date = occurrenceDate(year, month - 1, bill.dayOfMonth);
-      const rateForDate = ratesMap?.[date] ?? usdRate;
+      const monthKey = date.slice(0, 7);
 
-      const amountCents =
-        bill.currency === 'USD' && bill.amountCentsUSD
-          ? Math.round(bill.amountCentsUSD * rateForDate)
-          : bill.amountCents;
+      let amountCents: number;
+      if (bill.confirmations && typeof bill.confirmations[monthKey] === 'number') {
+        amountCents = bill.confirmations[monthKey];
+      } else if (bill.currency === 'USD' && bill.amountCentsUSD) {
+        const rateForDate = ratesMap?.[date] ?? usdRate;
+        amountCents = Math.round(bill.amountCentsUSD * rateForDate);
+      } else {
+        amountCents = bill.amountCents;
+      }
 
       generated.push({
         id: `fixed:${bill.id}:${date}`,
@@ -57,6 +70,45 @@ export function expandFixedBills(
   }
 
   return generated;
+}
+
+/**
+ * Retorna as contas em dólar ativas que venceram até hoje no mês atual (ou anterior)
+ * e ainda não possuem confirmação de valor real em R$.
+ */
+export function getPendingFixedBillConfirmations(
+  bills: FixedBill[],
+  today: Date = new Date(),
+  usdRate = 5.65,
+  ratesMap?: Record<string, number>,
+): PendingConfirmation[] {
+  const todayStr = toISO(today);
+  const curMonthKey = monthKeyOf(todayStr);
+  const pending: PendingConfirmation[] = [];
+
+  for (const bill of bills) {
+    if (!bill.active || bill.currency !== 'USD' || !bill.amountCentsUSD) continue;
+
+    const [year, month] = curMonthKey.split('-').map(Number);
+    const dueDate = occurrenceDate(year, month - 1, bill.dayOfMonth);
+
+    // Se o vencimento no mês atual já passou ou é hoje
+    if (dueDate <= todayStr && monthKeyOf(bill.startsOn) <= curMonthKey) {
+      const isConfirmed = bill.confirmations && typeof bill.confirmations[curMonthKey] === 'number';
+      if (!isConfirmed) {
+        const rateForDate = ratesMap?.[dueDate] ?? usdRate;
+        const projectedAmountCents = Math.round(bill.amountCentsUSD * rateForDate);
+        pending.push({
+          bill,
+          monthKey: curMonthKey,
+          dueDate,
+          projectedAmountCents,
+        });
+      }
+    }
+  }
+
+  return pending;
 }
 
 /** Retorna todas as datas ISO de ocorrência das contas fixas em dólar para busca de cotação histórica. */

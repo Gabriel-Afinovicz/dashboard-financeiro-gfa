@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS fixed_bills (
   amount_cents BIGINT NOT NULL CHECK (amount_cents > 0),
   currency TEXT NOT NULL DEFAULT 'BRL' CHECK (currency IN ('BRL', 'USD')),
   amount_cents_usd BIGINT DEFAULT NULL CHECK (amount_cents_usd IS NULL OR amount_cents_usd > 0),
+  confirmations JSONB DEFAULT '{}'::jsonb,
   day_of_month INT NOT NULL CHECK (day_of_month BETWEEN 1 AND 31),
   category TEXT NOT NULL CHECK (char_length(category) BETWEEN 1 AND 40),
   method TEXT NOT NULL CHECK (method IN ('pix', 'cartao_credito', 'cartao_debito', 'dinheiro', 'boleto', 'transferencia')),
@@ -17,10 +18,11 @@ CREATE TABLE IF NOT EXISTS fixed_bills (
 
 CREATE INDEX IF NOT EXISTS idx_fixed_bills_active ON fixed_bills (active);
 
--- Adiciona as colunas currency e amount_cents_usd em tabelas já existentes
+-- Adiciona as colunas currency, amount_cents_usd e confirmations em tabelas já existentes
 ALTER TABLE fixed_bills
   ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'BRL' CHECK (currency IN ('BRL', 'USD')),
-  ADD COLUMN IF NOT EXISTS amount_cents_usd BIGINT DEFAULT NULL CHECK (amount_cents_usd IS NULL OR amount_cents_usd > 0);
+  ADD COLUMN IF NOT EXISTS amount_cents_usd BIGINT DEFAULT NULL CHECK (amount_cents_usd IS NULL OR amount_cents_usd > 0),
+  ADD COLUMN IF NOT EXISTS confirmations JSONB DEFAULT '{}'::jsonb;
 
 -- 2. Adicionar suporte a parcelamento na tabela de transações
 ALTER TABLE transactions 

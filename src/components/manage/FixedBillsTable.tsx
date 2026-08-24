@@ -109,9 +109,15 @@ export function FixedBillsTable({ onEdit }: { onEdit: (bill: FixedBill) => void 
                       {bill.currency === 'USD' && bill.amountCentsUSD ? (
                         <div className="flex flex-col items-end">
                           <span>US$ {(bill.amountCentsUSD / 100).toFixed(2)}</span>
-                          <span className="text-[11px] font-normal text-muted">
-                            (≈ {money(Math.round(bill.amountCentsUSD * getEffectiveRateForBill(bill)))})
-                          </span>
+                          {bill.confirmations && typeof bill.confirmations[`${year}-${String(month).padStart(2, '0')}`] === 'number' ? (
+                            <span className="text-[11px] font-semibold text-emerald-500" title="Valor real confirmado no banco">
+                              ✓ {money(bill.confirmations[`${year}-${String(month).padStart(2, '0')}`])}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-normal text-muted">
+                              (≈ {money(Math.round(bill.amountCentsUSD * getEffectiveRateForBill(bill)))})
+                            </span>
+                          )}
                         </div>
                       ) : (
                         money(bill.amountCents)

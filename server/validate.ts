@@ -109,6 +109,7 @@ export interface FixedBillInput {
   amountCents: number;
   currency?: string;
   amountCentsUSD?: number;
+  confirmations?: Record<string, number>;
   dayOfMonth: number;
   category: string;
   method: string;
@@ -129,6 +130,7 @@ export function parseFixedBill(body: unknown): Result<FixedBillInput> {
 
   const currency = b.currency === 'USD' ? 'USD' : 'BRL';
   const amountCentsUSD = currency === 'USD' && isCents(b.amountCentsUSD) ? b.amountCentsUSD : undefined;
+  const confirmations = typeof b.confirmations === 'object' && b.confirmations !== null ? (b.confirmations as Record<string, number>) : undefined;
 
   return {
     ok: true,
@@ -137,6 +139,7 @@ export function parseFixedBill(body: unknown): Result<FixedBillInput> {
       amountCents: b.amountCents!,
       currency,
       amountCentsUSD,
+      confirmations,
       dayOfMonth: b.dayOfMonth!,
       category: b.category!.trim(),
       method: b.method,

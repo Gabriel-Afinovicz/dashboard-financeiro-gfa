@@ -296,6 +296,7 @@ const SELECT_FIXED_BILLS = `
   SELECT id, description, amount_cents AS "amountCents",
          COALESCE(currency, 'BRL') AS currency,
          amount_cents_usd AS "amountCentsUSD",
+         COALESCE(confirmations, '{}'::jsonb) AS confirmations,
          day_of_month AS "dayOfMonth", category, method, active,
          to_char(starts_on, 'YYYY-MM-DD') AS "startsOn",
          created_at AS "createdAt"
@@ -319,14 +320,26 @@ router.post('/fixed-bills', async (req, res) => {
   const v = parsed.value;
   try {
     const inserted = await pool.query(
-      `INSERT INTO fixed_bills (description, amount_cents, currency, amount_cents_usd, day_of_month, category, method, active, starts_on)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO fixed_bills (description, amount_cents, currency, amount_cents_usd, confirmations, day_of_month, category, method, active, starts_on)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id, description, amount_cents AS "amountCents",
                  COALESCE(currency, 'BRL') AS currency,
                  amount_cents_usd AS "amountCentsUSD",
+                 COALESCE(confirmations, '{}'::jsonb) AS confirmations,
                  day_of_month AS "dayOfMonth", category, method, active,
                  to_char(starts_on, 'YYYY-MM-DD') AS "startsOn", created_at AS "createdAt"`,
-      [v.description, v.amountCents, v.currency ?? 'BRL', v.amountCentsUSD ?? null, v.dayOfMonth, v.category, v.method, v.active, v.startsOn],
+      [
+        v.description,
+        v.amountCents,
+        v.currency ?? 'BRL',
+        v.amountCentsUSD ?? null,
+        JSON.stringify(v.confirmations ?? {}),
+        v.dayOfMonth,
+        v.category,
+        v.method,
+        v.active,
+        v.startsOn,
+      ],
     );
     res.status(201).json(inserted.rows[0]);
   } catch (err) {
@@ -348,14 +361,27 @@ router.put('/fixed-bills/:id', async (req, res) => {
   try {
     const updated = await pool.query(
       `UPDATE fixed_bills
-       SET description = $2, amount_cents = $3, currency = $4, amount_cents_usd = $5, day_of_month = $6, category = $7, method = $8, active = $9, starts_on = $10
+       SET description = $2, amount_cents = $3, currency = $4, amount_cents_usd = $5, confirmations = $6, day_of_month = $7, category = $8, method = $9, active = $10, starts_on = $11
        WHERE id = $1
        RETURNING id, description, amount_cents AS "amountCents",
                  COALESCE(currency, 'BRL') AS currency,
                  amount_cents_usd AS "amountCentsUSD",
+                 COALESCE(confirmations, '{}'::jsonb) AS confirmations,
                  day_of_month AS "dayOfMonth", category, method, active,
                  to_char(starts_on, 'YYYY-MM-DD') AS "startsOn", created_at AS "createdAt"`,
-      [req.params.id, v.description, v.amountCents, v.currency ?? 'BRL', v.amountCentsUSD ?? null, v.dayOfMonth, v.category, v.method, v.active, v.startsOn],
+      [
+        req.params.id,
+        v.description,
+        v.amountCents,
+        v.currency ?? 'BRL',
+        v.amountCentsUSD ?? null,
+        JSON.stringify(v.confirmations ?? {}),
+        v.dayOfMonth,
+        v.category,
+        v.method,
+        v.active,
+        v.startsOn,
+      ],
     );
     if (updated.rowCount === 0) {
       res.status(404).json({ error: 'Conta fixa não encontrada.' });

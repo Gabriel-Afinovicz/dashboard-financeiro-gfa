@@ -11,6 +11,7 @@ interface FixedBillsContextValue {
   updateBill: (id: string, input: FixedBillInput) => void;
   deleteBill: (id: string) => void;
   toggleBill: (id: string, active: boolean) => void;
+  confirmBillAmount: (id: string, monthKey: string, amountCentsBrl: number) => void;
   replaceBills: (next: FixedBill[]) => void;
   clearBills: () => void;
 }
@@ -73,6 +74,19 @@ export function FixedBillsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const confirmBillAmount = useCallback((id: string, monthKey: string, amountCentsBrl: number) => {
+    setBills((current) => {
+      const next = current.map((bill) => {
+        if (bill.id !== id) return bill;
+        const nextConfirmations = { ...(bill.confirmations ?? {}), [monthKey]: amountCentsBrl };
+        const updated = { ...bill, confirmations: nextConfirmations };
+        void api.updateFixedBill(id, updated).catch(() => {});
+        return updated;
+      });
+      return persist(next);
+    });
+  }, []);
+
   const replaceBills = useCallback((next: FixedBill[]) => {
     setBills(persist(next));
   }, []);
@@ -82,8 +96,8 @@ export function FixedBillsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ bills, addBill, updateBill, deleteBill, toggleBill, replaceBills, clearBills }),
-    [bills, addBill, updateBill, deleteBill, toggleBill, replaceBills, clearBills],
+    () => ({ bills, addBill, updateBill, deleteBill, toggleBill, confirmBillAmount, replaceBills, clearBills }),
+    [bills, addBill, updateBill, deleteBill, toggleBill, confirmBillAmount, replaceBills, clearBills],
   );
 
   return <FixedBillsContext.Provider value={value}>{children}</FixedBillsContext.Provider>;
