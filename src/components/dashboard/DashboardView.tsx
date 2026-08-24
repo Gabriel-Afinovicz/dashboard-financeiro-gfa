@@ -19,7 +19,8 @@ import {
   savingsRate,
 } from '../../lib/calc';
 import { todayISO } from '../../lib/format';
-import { fixedBillsTotalCents, mergeWithFixedBills } from '../../lib/fixedBills';
+import { fixedBillsTotalCents, getFixedBillsOccurrenceDates, mergeWithFixedBills } from '../../lib/fixedBills';
+import { calculateEffectiveUsdRate, useHistoricalUsdRates, useUsdRate } from '../../lib/currency';
 import { Card, CardTitle, Segmented, btnPrimary } from '../ui/controls';
 import { KpiCard } from './KpiCard';
 import { BalanceAreaChart } from './BalanceAreaChart';
@@ -33,8 +34,6 @@ import { RecentList } from './RecentList';
 import { FixedBillsPanel } from './FixedBillsPanel';
 import { CreditCardInvoiceCard } from './CreditCardInvoiceCard';
 import { CommitmentCard } from './CommitmentCard';
-
-import { calculateEffectiveUsdRate, useUsdRate } from '../../lib/currency';
 
 const PERIOD_OPTIONS: { value: number; label: string }[] = [
   { value: 3, label: '3 meses' },
@@ -50,6 +49,21 @@ export function DashboardView({ onGoManage, onOpenSettings }: { onGoManage: () =
   const { usdRate } = useUsdRate();
   const [periodMonths, setPeriodMonths] = useState(6);
 
+  const occurrenceDates = useMemo(() => getFixedBillsOccurrenceDates(bills), [bills]);
+  const rawHistoricalRates = useHistoricalUsdRates(occurrenceDates);
+
+  const historicalEffectiveRates = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const [date, rate] of Object.entries(rawHistoricalRates)) {
+      map[date] = calculateEffectiveUsdRate(
+        rate,
+        settings.cardSpreadPct ?? 5.5,
+        settings.cardIofPct ?? 4.38,
+      );
+    }
+    return map;
+  }, [rawHistoricalRates, settings.cardSpreadPct, settings.cardIofPct]);
+
   const effectiveUsdRate = calculateEffectiveUsdRate(
     usdRate,
     settings.cardSpreadPct ?? 5.5,
@@ -57,7 +71,7 @@ export function DashboardView({ onGoManage, onOpenSettings }: { onGoManage: () =
   );
 
   const computed = useMemo(() => {
-    const ledger = mergeWithFixedBills(transactions, bills, new Date(), effectiveUsdRate);
+    const ledger = mergeWithFixedBills(transactions, bills, new Date(), effectiveUsdRate, historicalEffectiveRates);
     const [prevKey, curKey] = lastMonthsKeys(2);
     const cur = monthSnapshot(ledger, curKey);
     const prev = monthSnapshot(ledger, prevKey);
@@ -103,7 +117,7 @@ export function DashboardView({ onGoManage, onOpenSettings }: { onGoManage: () =
       fixedTotal,
       commitmentRatio,
     };
-  }, [transactions, bills, investments, settings, periodMonths, effectiveUsdRate]);
+  }, [transactions, bills, investments, settings, periodMonths, effectiveUsdRate, historicalEffectiveRates]);
 
   const periodLabel = PERIOD_OPTIONS.find((p) => p.value === periodMonths)?.label ?? '';
   const empty = transactions.length === 0 && investments.length === 0 && bills.every((b) => !b.active);
