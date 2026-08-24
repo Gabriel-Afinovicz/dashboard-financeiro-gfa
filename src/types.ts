@@ -52,8 +52,12 @@ export interface Investment {
 export interface FixedBill {
   id: string;
   description: string;
-  /** Valor em centavos (sempre despesa). */
+  /** Valor em centavos de BRL (sempre despesa). */
   amountCents: number;
+  /** Moeda da conta fixa ('BRL' | 'USD'). Padrão 'BRL'. */
+  currency?: 'BRL' | 'USD';
+  /** Valor original em centavos de Dólar quando currency === 'USD' (ex.: 2000 para $ 20,00). */
+  amountCentsUSD?: number;
   /** Dia do mês em que a fatura cai (1–31). Meses curtos usam o último dia. */
   dayOfMonth: number;
   category: string;

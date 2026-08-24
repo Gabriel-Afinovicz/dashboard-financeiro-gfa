@@ -104,6 +104,18 @@ export function parseInvestment(body: unknown): Result<InvestmentInput> {
   };
 }
 
+export interface FixedBillInput {
+  description: string;
+  amountCents: number;
+  currency?: string;
+  amountCentsUSD?: number;
+  dayOfMonth: number;
+  category: string;
+  method: string;
+  active: boolean;
+  startsOn: string;
+}
+
 export function parseFixedBill(body: unknown): Result<FixedBillInput> {
   const b = body as Partial<FixedBillInput> | null;
   if (!b || typeof b !== 'object') return { ok: false, error: 'Corpo da requisição inválido.' };
@@ -114,11 +126,17 @@ export function parseFixedBill(body: unknown): Result<FixedBillInput> {
   }
   if (!isText(b.category, 1, 40)) return { ok: false, error: 'Categoria inválida.' };
   if (typeof b.method !== 'string' || !METHODS.has(b.method)) return { ok: false, error: 'Método inválido.' };
+
+  const currency = b.currency === 'USD' ? 'USD' : 'BRL';
+  const amountCentsUSD = currency === 'USD' && isCents(b.amountCentsUSD) ? b.amountCentsUSD : undefined;
+
   return {
     ok: true,
     value: {
       description: b.description!.trim(),
       amountCents: b.amountCents!,
+      currency,
+      amountCentsUSD,
       dayOfMonth: b.dayOfMonth!,
       category: b.category!.trim(),
       method: b.method,

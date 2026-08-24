@@ -293,8 +293,11 @@ router.put('/settings', async (req, res) => {
 
 // ---------- Contas Fixas ----------
 const SELECT_FIXED_BILLS = `
-  SELECT id, description, amount_cents AS "amountCents", day_of_month AS "dayOfMonth",
-         category, method, active, to_char(starts_on, 'YYYY-MM-DD') AS "startsOn",
+  SELECT id, description, amount_cents AS "amountCents",
+         COALESCE(currency, 'BRL') AS currency,
+         amount_cents_usd AS "amountCentsUSD",
+         day_of_month AS "dayOfMonth", category, method, active,
+         to_char(starts_on, 'YYYY-MM-DD') AS "startsOn",
          created_at AS "createdAt"
   FROM fixed_bills`;
 
@@ -316,11 +319,14 @@ router.post('/fixed-bills', async (req, res) => {
   const v = parsed.value;
   try {
     const inserted = await pool.query(
-      `INSERT INTO fixed_bills (description, amount_cents, day_of_month, category, method, active, starts_on)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, description, amount_cents AS "amountCents", day_of_month AS "dayOfMonth",
-                 category, method, active, to_char(starts_on, 'YYYY-MM-DD') AS "startsOn", created_at AS "createdAt"`,
-      [v.description, v.amountCents, v.dayOfMonth, v.category, v.method, v.active, v.startsOn],
+      `INSERT INTO fixed_bills (description, amount_cents, currency, amount_cents_usd, day_of_month, category, method, active, starts_on)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id, description, amount_cents AS "amountCents",
+                 COALESCE(currency, 'BRL') AS currency,
+                 amount_cents_usd AS "amountCentsUSD",
+                 day_of_month AS "dayOfMonth", category, method, active,
+                 to_char(starts_on, 'YYYY-MM-DD') AS "startsOn", created_at AS "createdAt"`,
+      [v.description, v.amountCents, v.currency ?? 'BRL', v.amountCentsUSD ?? null, v.dayOfMonth, v.category, v.method, v.active, v.startsOn],
     );
     res.status(201).json(inserted.rows[0]);
   } catch (err) {
@@ -342,11 +348,14 @@ router.put('/fixed-bills/:id', async (req, res) => {
   try {
     const updated = await pool.query(
       `UPDATE fixed_bills
-       SET description = $2, amount_cents = $3, day_of_month = $4, category = $5, method = $6, active = $7, starts_on = $8
+       SET description = $2, amount_cents = $3, currency = $4, amount_cents_usd = $5, day_of_month = $6, category = $7, method = $8, active = $9, starts_on = $10
        WHERE id = $1
-       RETURNING id, description, amount_cents AS "amountCents", day_of_month AS "dayOfMonth",
-                 category, method, active, to_char(starts_on, 'YYYY-MM-DD') AS "startsOn", created_at AS "createdAt"`,
-      [req.params.id, v.description, v.amountCents, v.dayOfMonth, v.category, v.method, v.active, v.startsOn],
+       RETURNING id, description, amount_cents AS "amountCents",
+                 COALESCE(currency, 'BRL') AS currency,
+                 amount_cents_usd AS "amountCentsUSD",
+                 day_of_month AS "dayOfMonth", category, method, active,
+                 to_char(starts_on, 'YYYY-MM-DD') AS "startsOn", created_at AS "createdAt"`,
+      [req.params.id, v.description, v.amountCents, v.currency ?? 'BRL', v.amountCentsUSD ?? null, v.dayOfMonth, v.category, v.method, v.active, v.startsOn],
     );
     if (updated.rowCount === 0) {
       res.status(404).json({ error: 'Conta fixa não encontrada.' });

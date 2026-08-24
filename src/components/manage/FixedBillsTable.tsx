@@ -83,7 +83,18 @@ export function FixedBillsTable({ onEdit }: { onEdit: (bill: FixedBill) => void 
                     <td className="px-3 py-2.5 tabular-nums text-muted">{bill.dayOfMonth}</td>
                     <td className="px-3 py-2.5 text-muted">{bill.category}</td>
                     <td className="px-3 py-2.5 text-muted">{METHOD_SHORT[bill.method]}</td>
-                    <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-neg">{money(bill.amountCents)}</td>
+                    <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-neg">
+                      {bill.currency === 'USD' && bill.amountCentsUSD ? (
+                        <div className="flex flex-col items-end">
+                          <span>US$ {(bill.amountCentsUSD / 100).toFixed(2)}</span>
+                          <span className="text-[11px] font-normal text-muted">
+                            (≈ {money(bill.amountCents)})
+                          </span>
+                        </div>
+                      ) : (
+                        money(bill.amountCents)
+                      )}
+                    </td>
                     <td className="px-3 py-2.5">
                       <div className="flex justify-center">
                         <Switch
