@@ -7,7 +7,8 @@ import { useAuth } from '../../store/AuthContext';
 import { useFixedBills } from '../../store/FixedBillsContext';
 import { useToast } from '../../store/ToastContext';
 import { currencyToCents, maskCurrency, toISO } from '../../lib/format';
-import { Field, MoneyInput, Segmented, SelectInput, Switch, TextInput, btnGhost, btnIcon } from '../ui/controls';
+import { calculateClosingDayFromDueDay } from '../../lib/calc';
+import { Field, MoneyInput, Segmented, SelectInput, Switch, TextInput, btnGhost, btnIcon, btnPrimary } from '../ui/controls';
 
 const DAYS_OF_MONTH = Array.from({ length: 31 }, (_, i) => i + 1);
 
@@ -30,6 +31,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
   const [initialBalance, setInitialBalance] = useState(() => maskCurrency(String(settings.initialBalanceCents || '')));
   const [goal, setGoal] = useState(() => maskCurrency(String(settings.monthlyGoalCents || '')));
   const [confirmClear, setConfirmClear] = useState(false);
+  const [pendingClosingDay, setPendingClosingDay] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -239,10 +241,10 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                 <CreditCard className="h-3.5 w-3.5" /> Cartão de Crédito - Fatura
               </h4>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Fechamento da fatura" hint="Dia em que a fatura corta.">
+                <Field label="Fechamento da fatura" hint="Calculado 7 dias antes do vencimento.">
                   <SelectInput
                     value={String(settings.creditCardClosingDay ?? 3)}
-                    onChange={(e) => update({ creditCardClosingDay: Number(e.target.value) })}
+                    onChange={(e) => setPendingClosingDay(Number(e.target.value))}
                   >
                     {DAYS_OF_MONTH.map((d) => (
                       <option key={d} value={d}>
@@ -251,10 +253,18 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                     ))}
                   </SelectInput>
                 </Field>
-                <Field label="Vencimento da fatura" hint="Dia de pagamento.">
+                <Field label="Vencimento da fatura" hint="Define o fechamento automático.">
                   <SelectInput
                     value={String(settings.creditCardDueDay ?? 10)}
-                    onChange={(e) => update({ creditCardDueDay: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const newDue = Number(e.target.value);
+                      const autoClosing = calculateClosingDayFromDueDay(newDue);
+                      update({
+                        creditCardDueDay: newDue,
+                        creditCardClosingDay: autoClosing,
+                      });
+                      push(`Vencimento no dia ${newDue}. Fechamento ajustado para o dia ${autoClosing} (7 dias antes).`);
+                    }}
                   >
                     {DAYS_OF_MONTH.map((d) => (
                       <option key={d} value={d}>
@@ -412,6 +422,47 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
           Dashboard Financeiro · v0.3 · PostgreSQL privado
         </footer>
       </aside>
+
+      {pendingClosingDay !== null && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-line bg-card p-5 shadow-2xl space-y-4">
+            <div className="flex items-center gap-2.5 text-amber-500 font-semibold text-base">
+              <AlertTriangle className="h-5 w-5 shrink-0" />
+              <span>Confirmar alteração manual</span>
+            </div>
+
+            <div className="text-xs text-muted leading-relaxed space-y-2">
+              <p>
+                O dia de fechamento é calculado automaticamente <strong>7 dias corridos antes do vencimento</strong> (ex.: vencimento dia 3 fecha dia 27 em meses de 31 dias, 26 em meses de 30 dias e 24 em fevereiro).
+              </p>
+              <p>
+                Deseja alterar o dia de fechamento para o <strong>Dia {pendingClosingDay}</strong> manualmente?
+              </p>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-line">
+              <button
+                type="button"
+                className={btnGhost}
+                onClick={() => setPendingClosingDay(null)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={btnPrimary}
+                onClick={() => {
+                  update({ creditCardClosingDay: pendingClosingDay });
+                  push(`Fechamento alterado manualmente para o dia ${pendingClosingDay}.`);
+                  setPendingClosingDay(null);
+                }}
+              >
+                Confirmar alteração
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

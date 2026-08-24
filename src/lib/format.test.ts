@@ -9,6 +9,7 @@ import {
   maskCurrency,
   maskPercent,
   monthLabel,
+  nextBusinessDay,
   percentToNumber,
 } from './format';
 
@@ -69,6 +70,20 @@ describe('datas', () => {
   it('formata para pt-BR', () => {
     expect(formatDateBR('2026-08-14')).toBe('14/08/2026');
     expect(monthLabel('2026-08')).toMatch(/ago\/26/);
+  });
+
+  it('ajusta Sábado e Domingo para a próxima Segunda-feira (dia útil)', () => {
+    // 2026-08-15 é Sábado -> Segunda 2026-08-17
+    const sat = new Date(2026, 7, 15);
+    expect(nextBusinessDay(sat).getDate()).toBe(17);
+
+    // 2026-08-16 é Domingo -> Segunda 2026-08-17
+    const sun = new Date(2026, 7, 16);
+    expect(nextBusinessDay(sun).getDate()).toBe(17);
+
+    // 2026-08-17 é Segunda -> permanece 17
+    const mon = new Date(2026, 7, 17);
+    expect(nextBusinessDay(mon).getDate()).toBe(17);
   });
 });
 

@@ -10,7 +10,7 @@ export const DEFAULT_SETTINGS: Settings = {
   font: 'inter',
   fontScale: 1,
   animations: true,
-  privacy: false,
+  privacy: true,
   initialBalanceCents: 0,
   monthlyGoalCents: 100000,
   creditCardClosingDay: 3,

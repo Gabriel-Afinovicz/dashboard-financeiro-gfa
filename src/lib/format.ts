@@ -117,3 +117,17 @@ export function addMonthsToISO(iso: string, monthsToAdd: number): string {
   const day = Math.min(d, lastDay);
   return `${targetYear}-${String(normalizedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
+
+/**
+ * Se a data cair no Sábado (6) ou Domingo (0), avança para a próxima Segunda-feira (dia útil bancário).
+ */
+export function nextBusinessDay(d: Date): Date {
+  const result = new Date(d);
+  const dayOfWeek = result.getDay();
+  if (dayOfWeek === 6) {
+    result.setDate(result.getDate() + 2);
+  } else if (dayOfWeek === 0) {
+    result.setDate(result.getDate() + 1);
+  }
+  return result;
+}

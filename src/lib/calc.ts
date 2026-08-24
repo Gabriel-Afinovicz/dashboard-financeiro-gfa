@@ -1,5 +1,5 @@
 import type { Investment, Transaction } from '../types';
-import { monthLabel, parseISO, toISO } from './format';
+import { monthLabel, nextBusinessDay, parseISO, toISO } from './format';
 
 /** Chave de mês de uma data ISO: "2026-08-14" -> "2026-08". */
 export function monthKeyOf(iso: string): string {
@@ -204,6 +204,15 @@ export interface CreditCardInvoiceSummary {
 }
 
 /** Calcula os valores e vencimentos da fatura do cartão de crédito baseados no corte e vencimento. */
+/**
+ * Calcula o dia de fechamento padrão recomendado (7 dias corridos antes do dia de vencimento).
+ * Em meses de 31 dias, vencimento no dia 3 resulta no fechamento no dia 27.
+ */
+export function calculateClosingDayFromDueDay(dueDay: number): number {
+  if (dueDay > 7) return dueDay - 7;
+  return 31 - (7 - dueDay);
+}
+
 export function creditCardInvoiceSummary(
   txs: Transaction[],
   closingDay: number = 3,
@@ -240,7 +249,8 @@ export function creditCardInvoiceSummary(
   }
 
   const actualDueDay = Math.min(dueDay, curMonthLastDay);
-  const dueDate = new Date(year, month, actualDueDay);
+  const rawDueDate = new Date(year, month, actualDueDay);
+  const dueDate = nextBusinessDay(rawDueDate);
   const dueDateISO = toISO(dueDate);
 
   const actualClosingDay = Math.min(closingDay, curMonthLastDay);

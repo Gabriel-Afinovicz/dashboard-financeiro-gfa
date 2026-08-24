@@ -42,10 +42,33 @@ interface SettingsContextValue {
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<Settings>(() => loadSettings());
+  const [settings, setSettings] = useState<Settings>(() => ({
+    ...loadSettings(),
+    privacy: true, // Sempre inicia com valores ocultos por segurança ao abrir o app
+  }));
   const hydratedFromDb = useRef(false);
   const { status: authStatus } = useAuth();
   const authenticated = authStatus === 'unlocked';
+
+  // Auto-ocultar valores sempre que trocar de aba ou perder o foco da janela
+  useEffect(() => {
+    const hideOnLeave = () => {
+      if (document.hidden) {
+        setSettings((s) => ({ ...s, privacy: true }));
+      }
+    };
+    const hideOnBlur = () => {
+      setSettings((s) => ({ ...s, privacy: true }));
+    };
+
+    document.addEventListener('visibilitychange', hideOnLeave);
+    window.addEventListener('blur', hideOnBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', hideOnLeave);
+      window.removeEventListener('blur', hideOnBlur);
+    };
+  }, []);
 
   const resolvedAccent = useMemo(() => {
     if (settings.accent === 'auto') return settings.theme === 'dark' ? '#fafafa' : '#0a0a0a';
@@ -60,11 +83,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       .getSettings()
       .then((remote) => {
         if (!cancelled && remote && typeof remote === 'object') {
-          setSettings((s) => ({ ...s, ...remote }));
+          // Mantém a privacidade ativada na abertura inicial
+          setSettings((s) => ({ ...s, ...remote, privacy: true }));
         }
       })
       .catch(() => {
-        // API indisponível: segue com o localStorage; a tela de erro dos dados orienta o usuário
+        // API indisponível: segue com o localStorage
       })
       .finally(() => {
         if (!cancelled) hydratedFromDb.current = true;

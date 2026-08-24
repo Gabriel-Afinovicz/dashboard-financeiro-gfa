@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Investment, Transaction } from '../types';
 import {
   accountBalanceCents,
+  calculateClosingDayFromDueDay,
   creditCardInvoiceSummary,
   cumulativeBalanceSeries,
   expensesByCategory,
@@ -180,6 +181,19 @@ describe('fatura de cartão de crédito e comprometimento', () => {
     expect(s.currentInvoiceCents).toBe(20000);
     expect(s.nextInvoiceCents).toBe(8000);
     expect(s.transactionsCount).toBe(2);
+  });
+
+  it('ajusta vencimento da fatura do cartão para segunda-feira se cair no fim de semana', () => {
+    // Em Agosto de 2026, dia 15 é Sábado -> o vencimento vira Segunda 17/08/2026
+    const s = creditCardInvoiceSummary([], 3, 15, new Date(2026, 7, 10));
+    expect(s.dueDateISO).toBe('2026-08-17');
+  });
+
+  it('calcula o dia de fechamento 7 dias antes do vencimento', () => {
+    // Vencimento dia 10 -> Fechamento dia 3
+    expect(calculateClosingDayFromDueDay(10)).toBe(3);
+    // Vencimento dia 3 -> Fechamento dia 27 em meses de 31 dias
+    expect(calculateClosingDayFromDueDay(3)).toBe(27);
   });
 
   it('calcula o percentual de comprometimento de renda', () => {
