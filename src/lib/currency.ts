@@ -51,7 +51,7 @@ export function useUsdRate(): { usdRate: number; loading: boolean } {
 const historicalRatesCache = new Map<string, number>();
 
 /**
- * Busca a cotação comercial do dólar para uma data específica (yyyy-mm-dd).
+ * Busca a cotação comercial de venda do dólar para uma data específica (yyyy-mm-dd).
  * Se a data for hoje ou no futuro, retorna a cotação atual.
  */
 export async function fetchUsdRateForDate(isoDate: string): Promise<number> {
@@ -68,12 +68,15 @@ export async function fetchUsdRateForDate(isoDate: string): Promise<number> {
   try {
     const res = await fetch(`https://economia.awesomeapi.com.br/json/daily/USD-BRL/?start_date=${yyyymmdd}&end_date=${yyyymmdd}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = (await res.json()) as Array<{ bid?: string }>;
-    if (Array.isArray(data) && data.length > 0 && data[0].bid) {
-      const parsed = parseFloat(data[0].bid);
-      if (!isNaN(parsed) && parsed > 0) {
-        historicalRatesCache.set(isoDate, parsed);
-        return parsed;
+    const data = (await res.json()) as Array<{ ask?: string; bid?: string }>;
+    if (Array.isArray(data) && data.length > 0) {
+      const rateStr = data[0].ask ?? data[0].bid;
+      if (rateStr) {
+        const parsed = parseFloat(rateStr);
+        if (!isNaN(parsed) && parsed > 0) {
+          historicalRatesCache.set(isoDate, parsed);
+          return parsed;
+        }
       }
     }
   } catch (err) {
