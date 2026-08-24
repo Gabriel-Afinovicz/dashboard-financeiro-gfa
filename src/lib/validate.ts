@@ -14,6 +14,13 @@ export interface InvestmentFormValues {
   rate: string; // mascarado "12,5"
 }
 
+export interface FixedBillFormValues {
+  description: string;
+  amount: string;
+  dayOfMonth: string;
+  category: string;
+}
+
 export type Errors<T> = Partial<Record<keyof T, string>>;
 
 export function validateTransaction(v: TransactionFormValues): Errors<TransactionFormValues> {
@@ -87,6 +94,35 @@ export function validateInvestment(v: InvestmentFormValues): Errors<InvestmentFo
     if (Number.isNaN(n) || n < 0 || n > 500) {
       errors.rate = 'Use uma taxa entre 0% e 500% ao ano.';
     }
+  }
+
+  return errors;
+}
+
+export function validateFixedBill(v: FixedBillFormValues): Errors<FixedBillFormValues> {
+  const errors: Errors<FixedBillFormValues> = {};
+
+  if (!v.description.trim()) {
+    errors.description = 'Informe uma descrição.';
+  } else if (!DESCRIPTION_RE.test(v.description.trim())) {
+    errors.description = 'Use de 2 a 60 caracteres (letras, números e pontuação simples).';
+  }
+
+  if (!v.amount) {
+    errors.amount = 'Informe o valor.';
+  } else if (!CURRENCY_RE.test(v.amount)) {
+    errors.amount = 'Valor inválido. Ex.: 89,90';
+  } else if (currencyToCents(v.amount) <= 0) {
+    errors.amount = 'O valor deve ser maior que zero.';
+  }
+
+  const day = Number(v.dayOfMonth);
+  if (!Number.isInteger(day) || day < 1 || day > 31) {
+    errors.dayOfMonth = 'Escolha um dia entre 1 e 31.';
+  }
+
+  if (!v.category) {
+    errors.category = 'Escolha uma categoria.';
   }
 
   return errors;

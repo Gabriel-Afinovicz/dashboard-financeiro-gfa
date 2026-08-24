@@ -106,3 +106,14 @@ export function monthLabel(key: string): string {
     .replace('.', '');
   return `${name}/${String(y).slice(2)}`;
 }
+
+/** Adiciona N meses a uma data ISO (yyyy-mm-dd), ajustando o dia se o mês for mais curto. */
+export function addMonthsToISO(iso: string, monthsToAdd: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const targetMonthIndex = m - 1 + monthsToAdd;
+  const targetYear = y + Math.floor(targetMonthIndex / 12);
+  const normalizedMonth = ((targetMonthIndex % 12) + 12) % 12;
+  const lastDay = new Date(targetYear, normalizedMonth + 1, 0).getDate();
+  const day = Math.min(d, lastDay);
+  return `${targetYear}-${String(normalizedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}

@@ -28,6 +28,10 @@ export interface Transaction {
   date: string;
   category: string;
   method: PaymentMethod;
+  /** Total de parcelas da compra (ex: 6). Quando 1 ou não informado, é compra à vista. */
+  installmentsCount?: number;
+  /** Número da parcela atual (ex: 1 para 1/6). */
+  currentInstallment?: number;
   createdAt: string;
 }
 
@@ -41,6 +45,23 @@ export interface Investment {
   date: string;
   /** Taxa anual esperada, em % (ex.: 12.5). */
   annualRatePct: number;
+  createdAt: string;
+}
+
+/** Conta que se repete todo mês no mesmo dia (água, luz, Netflix…). */
+export interface FixedBill {
+  id: string;
+  description: string;
+  /** Valor em centavos (sempre despesa). */
+  amountCents: number;
+  /** Dia do mês em que a fatura cai (1–31). Meses curtos usam o último dia. */
+  dayOfMonth: number;
+  category: string;
+  method: PaymentMethod;
+  /** Se false, a conta não entra nos totais (pausa). */
+  active: boolean;
+  /** A partir desta data a conta passa a valer (ISO yyyy-mm-dd). */
+  startsOn: string;
   createdAt: string;
 }
 
@@ -67,4 +88,8 @@ export interface Settings {
   privacy: boolean;
   initialBalanceCents: number;
   monthlyGoalCents: number;
+  /** Dia de fechamento/corte da fatura do cartão de crédito (1-31). */
+  creditCardClosingDay: number;
+  /** Dia de vencimento da fatura do cartão de crédito (1-31). */
+  creditCardDueDay: number;
 }

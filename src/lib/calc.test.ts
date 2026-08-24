@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { Investment, Transaction } from '../types';
 import {
   accountBalanceCents,
+  creditCardInvoiceSummary,
   cumulativeBalanceSeries,
   expensesByCategory,
+  incomeCommitmentRatio,
   investmentCurrentValueCents,
   investmentsSummary,
   lastMonthsKeys,
@@ -163,5 +165,25 @@ describe('indicadores', () => {
   it('lastMonthsKeys devolve meses em ordem crescente', () => {
     const keys = lastMonthsKeys(3, new Date(2026, 7, 14));
     expect(keys).toEqual(['2026-06', '2026-07', '2026-08']);
+  });
+});
+
+describe('fatura de cartão de crédito e comprometimento', () => {
+  it('calcula o valor da fatura dentro do ciclo de corte', () => {
+    const txs = [
+      tx({ type: 'despesa', amountCents: 15000, method: 'cartao_credito', date: '2026-08-01' }),
+      tx({ type: 'despesa', amountCents: 5000, method: 'cartao_credito', date: '2026-08-03' }),
+      tx({ type: 'despesa', amountCents: 8000, method: 'cartao_credito', date: '2026-08-04' }), // entra na próxima fatura (corte dia 3)
+      tx({ type: 'despesa', amountCents: 10000, method: 'pix', date: '2026-08-02' }),
+    ];
+    const s = creditCardInvoiceSummary(txs, 3, 10, new Date(2026, 7, 14));
+    expect(s.currentInvoiceCents).toBe(20000);
+    expect(s.nextInvoiceCents).toBe(8000);
+    expect(s.transactionsCount).toBe(2);
+  });
+
+  it('calcula o percentual de comprometimento de renda', () => {
+    expect(incomeCommitmentRatio(100000, 50000, 300000)).toBeCloseTo(50);
+    expect(incomeCommitmentRatio(50000, 50000, 0)).toBeNull();
   });
 });

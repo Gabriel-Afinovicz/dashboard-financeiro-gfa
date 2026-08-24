@@ -3,13 +3,15 @@ import { Router } from 'express';
 import type pg from 'pg';
 import { pool } from './db';
 import { login, requireAuth } from './auth';
-import { isUuid, parseInvestment, parseTransaction } from './validate';
+import { isUuid, parseFixedBill, parseInvestment, parseTransaction } from './validate';
 
 export const router = Router();
 
 const SELECT_TRANSACTIONS = `
   SELECT id, type, description, amount_cents AS "amountCents",
          to_char(date, 'YYYY-MM-DD') AS date, category, method,
+         COALESCE(installments_count, 1) AS "installmentsCount",
+         COALESCE(current_installment, 1) AS "currentInstallment",
          created_at AS "createdAt"
   FROM transactions`;
 
@@ -126,9 +128,9 @@ router.post('/data/replace', async (req, res) => {
 
     for (const t of txs) {
       await client.query(
-        `INSERT INTO transactions (id, type, description, amount_cents, date, category, method, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamptz, now()))`,
-        [t.id, t.type, t.description, t.amountCents, t.date, t.category, t.method, t.createdAt],
+        `INSERT INTO transactions (id, type, description, amount_cents, date, category, method, installments_count, current_installment, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 1), COALESCE($9, 1), COALESCE($10::timestamptz, now()))`,
+        [t.id, t.type, t.description, t.amountCents, t.date, t.category, t.method, t.installmentsCount, t.currentInstallment, t.createdAt],
       );
     }
     for (const i of invs) {
@@ -161,11 +163,14 @@ router.post('/transactions', async (req, res) => {
   }
   const v = parsed.value;
   const inserted = await pool.query(
-    `INSERT INTO transactions (type, description, amount_cents, date, category, method)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO transactions (type, description, amount_cents, date, category, method, installments_count, current_installment)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING id, type, description, amount_cents AS "amountCents",
-               to_char(date, 'YYYY-MM-DD') AS date, category, method, created_at AS "createdAt"`,
-    [v.type, v.description, v.amountCents, v.date, v.category, v.method],
+               to_char(date, 'YYYY-MM-DD') AS date, category, method,
+               COALESCE(installments_count, 1) AS "installmentsCount",
+               COALESCE(current_installment, 1) AS "currentInstallment",
+               created_at AS "createdAt"`,
+    [v.type, v.description, v.amountCents, v.date, v.category, v.method, v.installmentsCount ?? 1, v.currentInstallment ?? 1],
   );
   res.status(201).json(inserted.rows[0]);
 });
@@ -183,11 +188,15 @@ router.put('/transactions/:id', async (req, res) => {
   const v = parsed.value;
   const updated = await pool.query(
     `UPDATE transactions
-     SET type = $2, description = $3, amount_cents = $4, date = $5, category = $6, method = $7
+     SET type = $2, description = $3, amount_cents = $4, date = $5, category = $6, method = $7,
+         installments_count = $8, current_installment = $9
      WHERE id = $1
      RETURNING id, type, description, amount_cents AS "amountCents",
-               to_char(date, 'YYYY-MM-DD') AS date, category, method, created_at AS "createdAt"`,
-    [req.params.id, v.type, v.description, v.amountCents, v.date, v.category, v.method],
+               to_char(date, 'YYYY-MM-DD') AS date, category, method,
+               COALESCE(installments_count, 1) AS "installmentsCount",
+               COALESCE(current_installment, 1) AS "currentInstallment",
+               created_at AS "createdAt"`,
+    [req.params.id, v.type, v.description, v.amountCents, v.date, v.category, v.method, v.installmentsCount ?? 1, v.currentInstallment ?? 1],
   );
   if (updated.rowCount === 0) {
     res.status(404).json({ error: 'Transação não encontrada.' });
@@ -280,4 +289,88 @@ router.put('/settings', async (req, res) => {
   }
   await setMeta(pool, 'settings', req.body);
   res.json({ ok: true });
+});
+
+// ---------- Contas Fixas ----------
+const SELECT_FIXED_BILLS = `
+  SELECT id, description, amount_cents AS "amountCents", day_of_month AS "dayOfMonth",
+         category, method, active, to_char(starts_on, 'YYYY-MM-DD') AS "startsOn",
+         created_at AS "createdAt"
+  FROM fixed_bills`;
+
+router.get('/fixed-bills', async (_req, res) => {
+  try {
+    const rows = await pool.query(`${SELECT_FIXED_BILLS} ORDER BY day_of_month ASC, created_at DESC`);
+    res.json(rows.rows);
+  } catch {
+    res.json([]);
+  }
+});
+
+router.post('/fixed-bills', async (req, res) => {
+  const parsed = parseFixedBill(req.body);
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+  const v = parsed.value;
+  try {
+    const inserted = await pool.query(
+      `INSERT INTO fixed_bills (description, amount_cents, day_of_month, category, method, active, starts_on)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, description, amount_cents AS "amountCents", day_of_month AS "dayOfMonth",
+                 category, method, active, to_char(starts_on, 'YYYY-MM-DD') AS "startsOn", created_at AS "createdAt"`,
+      [v.description, v.amountCents, v.dayOfMonth, v.category, v.method, v.active, v.startsOn],
+    );
+    res.status(201).json(inserted.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao criar conta fixa no banco de dados.' });
+  }
+});
+
+router.put('/fixed-bills/:id', async (req, res) => {
+  if (!isUuid(req.params.id)) {
+    res.status(400).json({ error: 'Identificador inválido.' });
+    return;
+  }
+  const parsed = parseFixedBill(req.body);
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+  const v = parsed.value;
+  try {
+    const updated = await pool.query(
+      `UPDATE fixed_bills
+       SET description = $2, amount_cents = $3, day_of_month = $4, category = $5, method = $6, active = $7, starts_on = $8
+       WHERE id = $1
+       RETURNING id, description, amount_cents AS "amountCents", day_of_month AS "dayOfMonth",
+                 category, method, active, to_char(starts_on, 'YYYY-MM-DD') AS "startsOn", created_at AS "createdAt"`,
+      [req.params.id, v.description, v.amountCents, v.dayOfMonth, v.category, v.method, v.active, v.startsOn],
+    );
+    if (updated.rowCount === 0) {
+      res.status(404).json({ error: 'Conta fixa não encontrada.' });
+      return;
+    }
+    res.json(updated.rows[0]);
+  } catch {
+    res.status(500).json({ error: 'Erro ao atualizar conta fixa.' });
+  }
+});
+
+router.delete('/fixed-bills/:id', async (req, res) => {
+  if (!isUuid(req.params.id)) {
+    res.status(400).json({ error: 'Identificador inválido.' });
+    return;
+  }
+  try {
+    const deleted = await pool.query('DELETE FROM fixed_bills WHERE id = $1', [req.params.id]);
+    if (deleted.rowCount === 0) {
+      res.status(404).json({ error: 'Conta fixa não encontrada.' });
+      return;
+    }
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Erro ao excluir conta fixa.' });
+  }
 });

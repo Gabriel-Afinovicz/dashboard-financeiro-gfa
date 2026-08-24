@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Database, Download, LogOut, Paintbrush, RotateCcw, ShieldCheck, Trash2, Upload, Wallet, X } from 'lucide-react';
-import type { DataStore, FontOption, ThemeMode } from '../../types';
+import { AlertTriangle, CreditCard, Database, Download, LogOut, Paintbrush, RotateCcw, ShieldCheck, Trash2, Upload, Wallet, X } from 'lucide-react';
+import type { DataStore, FixedBill, FontOption, ThemeMode } from '../../types';
 import { FONT_LABELS, useSettings } from '../../store/SettingsContext';
 import { useData } from '../../store/DataContext';
 import { useAuth } from '../../store/AuthContext';
+import { useFixedBills } from '../../store/FixedBillsContext';
 import { useToast } from '../../store/ToastContext';
 import { currencyToCents, maskCurrency, toISO } from '../../lib/format';
 import { Field, MoneyInput, Segmented, SelectInput, Switch, btnGhost, btnIcon } from '../ui/controls';
+
+const DAYS_OF_MONTH = Array.from({ length: 31 }, (_, i) => i + 1);
 
 const ACCENT_PRESETS: { value: string; label: string }[] = [
   { value: 'auto', label: 'Preto & branco (automático)' },
@@ -20,6 +23,7 @@ const ACCENT_PRESETS: { value: string; label: string }[] = [
 export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { settings, update, resolvedAccent } = useSettings();
   const { transactions, investments, sampleData, replaceAll, clearAll, loadSample } = useData();
+  const { bills, replaceBills, clearBills } = useFixedBills();
   const { logout } = useAuth();
   const { push } = useToast();
 
@@ -49,6 +53,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
     const payload = {
       exportedAt: new Date().toISOString(),
       data: { version: 1, transactions, investments, sampleData },
+      fixedBills: bills,
       settings,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -72,6 +77,13 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
           return;
         }
         await replaceAll({ ...data, sampleData: false });
+        if (Array.isArray(parsed.fixedBills)) {
+          replaceBills(parsed.fixedBills.filter((item: unknown): item is FixedBill => {
+            if (!item || typeof item !== 'object') return false;
+            const b = item as Partial<FixedBill>;
+            return typeof b.id === 'string' && typeof b.description === 'string' && typeof b.amountCents === 'number';
+          }));
+        }
         if (parsed.settings) update(parsed.settings);
         push('Backup importado com sucesso.');
       } catch (err) {
@@ -221,6 +233,38 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
             <Field label="Meta de economia mensal" hint="Usada no anel de progresso do dashboard.">
               <MoneyInput value={goal} onChange={setGoal} onBlur={() => commitMoney(goal, 'monthlyGoalCents')} />
             </Field>
+
+            <div className="pt-2 border-t border-line space-y-3">
+              <h4 className="flex items-center gap-1.5 text-xs font-medium text-muted">
+                <CreditCard className="h-3.5 w-3.5" /> Cartão de Crédito - Fatura
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Fechamento da fatura" hint="Dia em que a fatura corta.">
+                  <SelectInput
+                    value={String(settings.creditCardClosingDay ?? 3)}
+                    onChange={(e) => update({ creditCardClosingDay: Number(e.target.value) })}
+                  >
+                    {DAYS_OF_MONTH.map((d) => (
+                      <option key={d} value={d}>
+                        Dia {d}
+                      </option>
+                    ))}
+                  </SelectInput>
+                </Field>
+                <Field label="Vencimento da fatura" hint="Dia de pagamento.">
+                  <SelectInput
+                    value={String(settings.creditCardDueDay ?? 10)}
+                    onChange={(e) => update({ creditCardDueDay: Number(e.target.value) })}
+                  >
+                    {DAYS_OF_MONTH.map((d) => (
+                      <option key={d} value={d}>
+                        Dia {d}
+                      </option>
+                    ))}
+                  </SelectInput>
+                </Field>
+              </div>
+            </div>
           </section>
 
           {/* Dados */}
@@ -229,8 +273,8 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
               <Database className="h-3.5 w-3.5" /> Dados
             </h3>
             <p className="text-xs text-faint">
-              Os dados ficam salvos no seu banco PostgreSQL privado. Use o backup em JSON para guardar uma cópia
-              extra ou transferir para outro ambiente.
+              Transações e investimentos ficam no PostgreSQL. Contas fixas, por enquanto, ficam só neste
+              navegador. O backup em JSON guarda os dois.
             </p>
 
             <div className="grid grid-cols-2 gap-2">
@@ -281,6 +325,7 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                     onClick={async () => {
                       try {
                         await clearAll();
+                        clearBills();
                         setConfirmClear(false);
                         push('Todos os dados foram apagados.', 'info');
                       } catch (err) {

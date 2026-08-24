@@ -1,10 +1,10 @@
 import { forwardRef, useEffect, useState } from 'react';
-import { Check, Plus, X } from 'lucide-react';
+import { Check, CreditCard, Plus, X } from 'lucide-react';
 import type { Transaction, TransactionType } from '../../types';
 import { useData } from '../../store/DataContext';
 import { useToast } from '../../store/ToastContext';
 import { categoriesFor, PAYMENT_METHODS } from '../../lib/categories';
-import { currencyToCents, maskCurrency, todayISO } from '../../lib/format';
+import { addMonthsToISO, currencyToCents, formatBRL, maskCurrency, todayISO } from '../../lib/format';
 import { validateTransaction, type Errors, type TransactionFormValues } from '../../lib/validate';
 import { Card, CardTitle, Field, MoneyInput, SelectInput, TextInput, btnGhost, btnPrimary, inputClass } from '../ui/controls';
 
@@ -12,6 +12,8 @@ interface Props {
   editing: Transaction | null;
   onDoneEditing: () => void;
 }
+
+const INSTALLMENT_OPTIONS = Array.from({ length: 36 }, (_, i) => i + 1);
 
 export const TransactionForm = forwardRef<HTMLElement, Props>(function TransactionForm(
   { editing, onDoneEditing },
@@ -26,6 +28,7 @@ export const TransactionForm = forwardRef<HTMLElement, Props>(function Transacti
   const [date, setDate] = useState(todayISO());
   const [category, setCategory] = useState<string>(categoriesFor('despesa')[0]);
   const [method, setMethod] = useState(PAYMENT_METHODS[0].value);
+  const [installments, setInstallments] = useState(1);
   const [errors, setErrors] = useState<Errors<TransactionFormValues>>({});
 
   useEffect(() => {
@@ -36,6 +39,7 @@ export const TransactionForm = forwardRef<HTMLElement, Props>(function Transacti
       setDate(editing.date);
       setCategory(editing.category);
       setMethod(editing.method);
+      setInstallments(editing.installmentsCount ?? 1);
       setErrors({});
     }
   }, [editing]);
@@ -44,7 +48,12 @@ export const TransactionForm = forwardRef<HTMLElement, Props>(function Transacti
     setType(t);
     const list = categoriesFor(t);
     if (!list.includes(category)) setCategory(list[0]);
+    if (t === 'receita') setInstallments(1);
   };
+
+  const totalCents = currencyToCents(amount);
+  const isCreditCard = method === 'cartao_credito' && type === 'despesa';
+  const perInstallmentCents = isCreditCard && installments > 1 ? Math.floor(totalCents / installments) : totalCents;
 
   const submit = async () => {
     const values: TransactionFormValues = { description: description.trim(), amount, date, category };
@@ -52,27 +61,61 @@ export const TransactionForm = forwardRef<HTMLElement, Props>(function Transacti
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
-    const input = {
-      type,
-      description: values.description,
-      amountCents: currencyToCents(amount),
-      date,
-      category,
-      method,
-    };
-
     try {
       if (editing) {
+        const input = {
+          type,
+          description: values.description,
+          amountCents: totalCents,
+          date,
+          category,
+          method,
+          installmentsCount: isCreditCard ? installments : 1,
+          currentInstallment: editing.currentInstallment ?? 1,
+        };
         await updateTransaction(editing.id, input);
         push('Transação atualizada.');
         onDoneEditing();
         reset();
-      } else {
-        await addTransaction(input);
-        push(type === 'receita' ? 'Receita adicionada.' : 'Despesa adicionada.');
-        // Mantém tipo e data para facilitar lançamentos em sequência
+      } else if (isCreditCard && installments > 1) {
+        // Gera as parcelas sequenciais nos meses futuros
+        const baseCents = Math.floor(totalCents / installments);
+        const remainder = totalCents - baseCents * installments;
+
+        for (let i = 1; i <= installments; i++) {
+          const instCents = i === 1 ? baseCents + remainder : baseCents;
+          const instDate = addMonthsToISO(date, i - 1);
+          await addTransaction({
+            type: 'despesa',
+            description: `${values.description} (${i}/${installments})`,
+            amountCents: instCents,
+            date: instDate,
+            category,
+            method: 'cartao_credito',
+            installmentsCount: installments,
+            currentInstallment: i,
+          });
+        }
+        push(`${installments} parcelas adicionadas com sucesso nos meses correspondentes.`);
         setDescription('');
         setAmount('');
+        setInstallments(1);
+        setErrors({});
+      } else {
+        await addTransaction({
+          type,
+          description: values.description,
+          amountCents: totalCents,
+          date,
+          category,
+          method,
+          installmentsCount: isCreditCard ? installments : 1,
+          currentInstallment: 1,
+        });
+        push(type === 'receita' ? 'Receita adicionada.' : 'Despesa adicionada.');
+        setDescription('');
+        setAmount('');
+        setInstallments(1);
         setErrors({});
       }
     } catch (err) {
@@ -87,6 +130,7 @@ export const TransactionForm = forwardRef<HTMLElement, Props>(function Transacti
     setDate(todayISO());
     setCategory(categoriesFor('despesa')[0]);
     setMethod(PAYMENT_METHODS[0].value);
+    setInstallments(1);
     setErrors({});
   };
 
@@ -148,11 +192,16 @@ export const TransactionForm = forwardRef<HTMLElement, Props>(function Transacti
             />
           </Field>
 
-          <Field label="Valor" required hint="Digite apenas números; a máscara formata." error={errors.amount}>
+          <Field
+            label={isCreditCard && installments > 1 ? 'Valor total da compra' : 'Valor'}
+            required
+            hint={isCreditCard && installments > 1 ? 'O sistema calculará o valor por parcela.' : 'Digite apenas números; a máscara formata.'}
+            error={errors.amount}
+          >
             <MoneyInput value={amount} onChange={setAmount} invalid={!!errors.amount} />
           </Field>
 
-          <Field label="Data" required hint="Quando aconteceu (não aceita datas futuras)." error={errors.date}>
+          <Field label="Data" required hint="Quando aconteceu (ou início da 1ª parcela)." error={errors.date}>
             <input
               type="date"
               value={date}
@@ -173,7 +222,7 @@ export const TransactionForm = forwardRef<HTMLElement, Props>(function Transacti
             </SelectInput>
           </Field>
 
-          <Field label="Método de pagamento" required hint="Pix alimenta o painel de Pix do dashboard.">
+          <Field label="Método de pagamento" required hint="Cartão de crédito permite parcelamento.">
             <SelectInput value={method} onChange={(e) => setMethod(e.target.value as typeof method)}>
               {PAYMENT_METHODS.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -182,12 +231,38 @@ export const TransactionForm = forwardRef<HTMLElement, Props>(function Transacti
               ))}
             </SelectInput>
           </Field>
+
+          {isCreditCard && !editing && (
+            <Field label="Parcelamento" required hint="Número de parcelas da compra.">
+              <SelectInput value={String(installments)} onChange={(e) => setInstallments(Number(e.target.value))}>
+                {INSTALLMENT_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n === 1 ? '1x (À vista)' : `${n}x`}
+                  </option>
+                ))}
+              </SelectInput>
+            </Field>
+          )}
         </div>
+
+        {isCreditCard && installments > 1 && totalCents > 0 && (
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/5 p-3 text-xs text-muted">
+            <CreditCard className="h-4 w-4 shrink-0 text-accent" />
+            <div>
+              <span className="font-semibold text-fg">
+                {installments}x de {formatBRL(perInstallmentCents)}
+              </span>
+              <span className="ml-1 text-faint">
+                (Total: {formatBRL(totalCents)} · 1ª parcela em {date.split('-').reverse().join('/')})
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="mt-4 flex flex-wrap gap-2">
           <button type="submit" className={btnPrimary}>
             {editing ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {editing ? 'Salvar alterações' : 'Adicionar transação'}
+            {editing ? 'Salvar alterações' : isCreditCard && installments > 1 ? `Gerar ${installments} parcelas` : 'Adicionar transação'}
           </button>
           {editing && (
             <button

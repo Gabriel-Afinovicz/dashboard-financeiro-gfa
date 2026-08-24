@@ -11,6 +11,8 @@ export interface TransactionInput {
   date: string;
   category: string;
   method: string;
+  installmentsCount?: number;
+  currentInstallment?: number;
 }
 
 export interface InvestmentInput {
@@ -19,6 +21,16 @@ export interface InvestmentInput {
   amountCents: number;
   date: string;
   annualRatePct: number;
+}
+
+export interface FixedBillInput {
+  description: string;
+  amountCents: number;
+  dayOfMonth: number;
+  category: string;
+  method: string;
+  active: boolean;
+  startsOn: string;
 }
 
 type Result<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -51,6 +63,10 @@ export function parseTransaction(body: unknown): Result<TransactionInput> {
   if (!isDate(b.date)) return { ok: false, error: 'Data inválida.' };
   if (!isText(b.category, 1, 40)) return { ok: false, error: 'Categoria inválida.' };
   if (typeof b.method !== 'string' || !METHODS.has(b.method)) return { ok: false, error: 'Método de pagamento inválido.' };
+
+  const instCount = typeof b.installmentsCount === 'number' && Number.isInteger(b.installmentsCount) && b.installmentsCount >= 1 && b.installmentsCount <= 36 ? b.installmentsCount : 1;
+  const curInst = typeof b.currentInstallment === 'number' && Number.isInteger(b.currentInstallment) && b.currentInstallment >= 1 && b.currentInstallment <= instCount ? b.currentInstallment : 1;
+
   return {
     ok: true,
     value: {
@@ -60,6 +76,8 @@ export function parseTransaction(body: unknown): Result<TransactionInput> {
       date: b.date!,
       category: b.category!.trim(),
       method: b.method,
+      installmentsCount: instCount,
+      currentInstallment: curInst,
     },
   };
 }
@@ -82,6 +100,30 @@ export function parseInvestment(body: unknown): Result<InvestmentInput> {
       amountCents: b.amountCents!,
       date: b.date!,
       annualRatePct: b.annualRatePct,
+    },
+  };
+}
+
+export function parseFixedBill(body: unknown): Result<FixedBillInput> {
+  const b = body as Partial<FixedBillInput> | null;
+  if (!b || typeof b !== 'object') return { ok: false, error: 'Corpo da requisição inválido.' };
+  if (!isText(b.description, 2, 60)) return { ok: false, error: 'Descrição inválida.' };
+  if (!isCents(b.amountCents)) return { ok: false, error: 'Valor inválido.' };
+  if (typeof b.dayOfMonth !== 'number' || !Number.isInteger(b.dayOfMonth) || b.dayOfMonth < 1 || b.dayOfMonth > 31) {
+    return { ok: false, error: 'Dia do mês inválido (1 a 31).' };
+  }
+  if (!isText(b.category, 1, 40)) return { ok: false, error: 'Categoria inválida.' };
+  if (typeof b.method !== 'string' || !METHODS.has(b.method)) return { ok: false, error: 'Método inválido.' };
+  return {
+    ok: true,
+    value: {
+      description: b.description!.trim(),
+      amountCents: b.amountCents!,
+      dayOfMonth: b.dayOfMonth!,
+      category: b.category!.trim(),
+      method: b.method,
+      active: b.active !== false,
+      startsOn: isDate(b.startsOn) ? b.startsOn : new Date().toISOString().slice(0, 10),
     },
   };
 }

@@ -1,5 +1,5 @@
 import type { Investment, Transaction } from '../types';
-import { monthLabel, parseISO } from './format';
+import { monthLabel, parseISO, toISO } from './format';
 
 /** Chave de mês de uma data ISO: "2026-08-14" -> "2026-08". */
 export function monthKeyOf(iso: string): string {
@@ -191,4 +191,79 @@ export function pctChange(current: number, previous: number): number | null {
 export function savingsRate(incomeCents: number, expenseCents: number): number | null {
   if (incomeCents <= 0) return null;
   return ((incomeCents - expenseCents) / incomeCents) * 100;
+}
+
+export interface CreditCardInvoiceSummary {
+  currentInvoiceCents: number;
+  nextInvoiceCents: number;
+  dueDateISO: string;
+  closingDateISO: string;
+  daysUntilDue: number;
+  isClosed: boolean;
+  transactionsCount: number;
+}
+
+/** Calcula os valores e vencimentos da fatura do cartão de crédito baseados no corte e vencimento. */
+export function creditCardInvoiceSummary(
+  txs: Transaction[],
+  closingDay: number = 3,
+  dueDay: number = 10,
+  refDate: Date = new Date(),
+): CreditCardInvoiceSummary {
+  const year = refDate.getFullYear();
+  const month = refDate.getMonth();
+
+  const prevMonthLastDay = new Date(year, month, 0).getDate();
+  const startDay = Math.min(closingDay + 1, prevMonthLastDay);
+
+  const startCutoff = new Date(year, month - 1, startDay);
+  const curMonthLastDay = new Date(year, month + 1, 0).getDate();
+  const endDay = Math.min(closingDay, curMonthLastDay);
+  const endCutoff = new Date(year, month, endDay, 23, 59, 59);
+
+  const nextEndDay = Math.min(closingDay, new Date(year, month + 2, 0).getDate());
+  const nextEndCutoff = new Date(year, month + 1, nextEndDay, 23, 59, 59);
+
+  let currentInvoiceCents = 0;
+  let nextInvoiceCents = 0;
+  let transactionsCount = 0;
+
+  for (const t of txs) {
+    if (t.type !== 'despesa' || t.method !== 'cartao_credito') continue;
+    const tDate = parseISO(t.date);
+    if (tDate >= startCutoff && tDate <= endCutoff) {
+      currentInvoiceCents += t.amountCents;
+      transactionsCount++;
+    } else if (tDate > endCutoff && tDate <= nextEndCutoff) {
+      nextInvoiceCents += t.amountCents;
+    }
+  }
+
+  const actualDueDay = Math.min(dueDay, curMonthLastDay);
+  const dueDate = new Date(year, month, actualDueDay);
+  const dueDateISO = toISO(dueDate);
+
+  const actualClosingDay = Math.min(closingDay, curMonthLastDay);
+  const closingDateISO = toISO(new Date(year, month, actualClosingDay));
+
+  const todayZero = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate()).getTime();
+  const dueZero = dueDate.getTime();
+  const daysUntilDue = Math.ceil((dueZero - todayZero) / (1000 * 60 * 60 * 24));
+  const isClosed = refDate.getDate() > closingDay;
+
+  return {
+    currentInvoiceCents,
+    nextInvoiceCents,
+    dueDateISO,
+    closingDateISO,
+    daysUntilDue,
+    isClosed,
+    transactionsCount,
+  };
+}
+
+/** Comprometimento da Renda = (Gastos Fixos + Fatura do Cartão) / Receita do Mês * 100 */
+export function incomeCommitmentRatio(fixedBillsCents: number, cardInvoiceCents: number, monthlyIncomeCents: number): number | null {
+  if (monthlyIncomeCents <= 0) return null;
+  return ((fixedBillsCents + cardInvoiceCents) / monthlyIncomeCents) * 100;
 }

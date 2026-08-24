@@ -2,11 +2,14 @@ import { useMemo, useState } from 'react';
 import { BarChart3, ChartLine, ChartPie, CircleDollarSign, Landmark, PiggyBank, Plus, Scale, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { useData } from '../../store/DataContext';
 import { useSettings } from '../../store/SettingsContext';
+import { useFixedBills } from '../../store/FixedBillsContext';
 import {
   accountBalanceCents,
   allMonthKeys,
+  creditCardInvoiceSummary,
   cumulativeBalanceSeries,
   expensesByCategory,
+  incomeCommitmentRatio,
   investmentsSummary,
   lastMonthsKeys,
   monthlyAggregates,
@@ -16,6 +19,7 @@ import {
   savingsRate,
 } from '../../lib/calc';
 import { todayISO } from '../../lib/format';
+import { fixedBillsTotalCents, mergeWithFixedBills } from '../../lib/fixedBills';
 import { Card, CardTitle, Segmented, btnPrimary } from '../ui/controls';
 import { KpiCard } from './KpiCard';
 import { BalanceAreaChart } from './BalanceAreaChart';
@@ -26,6 +30,9 @@ import { GoalCard } from './GoalCard';
 import { MonthIndicators } from './MonthIndicators';
 import { InvestmentsPanel } from './InvestmentsPanel';
 import { RecentList } from './RecentList';
+import { FixedBillsPanel } from './FixedBillsPanel';
+import { CreditCardInvoiceCard } from './CreditCardInvoiceCard';
+import { CommitmentCard } from './CommitmentCard';
 
 const PERIOD_OPTIONS: { value: number; label: string }[] = [
   { value: 3, label: '3 meses' },
@@ -36,28 +43,38 @@ const PERIOD_OPTIONS: { value: number; label: string }[] = [
 
 export function DashboardView({ onGoManage, onOpenSettings }: { onGoManage: () => void; onOpenSettings: () => void }) {
   const { transactions, investments, sampleData } = useData();
+  const { bills } = useFixedBills();
   const { settings } = useSettings();
   const [periodMonths, setPeriodMonths] = useState(6);
 
   const computed = useMemo(() => {
+    const ledger = mergeWithFixedBills(transactions, bills);
     const [prevKey, curKey] = lastMonthsKeys(2);
-    const cur = monthSnapshot(transactions, curKey);
-    const prev = monthSnapshot(transactions, prevKey);
-    const balance = accountBalanceCents(transactions, settings.initialBalanceCents);
+    const cur = monthSnapshot(ledger, curKey);
+    const prev = monthSnapshot(ledger, prevKey);
+    const balance = accountBalanceCents(ledger, settings.initialBalanceCents);
     const inv = investmentsSummary(investments);
 
-    const keys = periodMonths === 0 ? allMonthKeys(transactions) : lastMonthsKeys(periodMonths);
+    const keys = periodMonths === 0 ? allMonthKeys(ledger) : lastMonthsKeys(periodMonths);
     const keySet = new Set(keys);
-    const monthly = monthlyAggregates(transactions, keys);
-    const balanceSeries = cumulativeBalanceSeries(transactions, settings.initialBalanceCents, keys);
-    const categories = expensesByCategory(transactions, keySet);
+    const monthly = monthlyAggregates(ledger, keys);
+    const balanceSeries = cumulativeBalanceSeries(ledger, settings.initialBalanceCents, keys);
+    const categories = expensesByCategory(ledger, keySet);
     const categoriesTotal = categories.reduce((acc, c) => acc + c.totalCents, 0);
-    const pix = pixSummary(transactions, keySet);
+    const pix = pixSummary(ledger, keySet);
 
     const curKeySet = new Set([curKey]);
-    const monthTxCount = transactions.filter((t) => curKeySet.has(t.date.slice(0, 7))).length;
-    const monthCategories = expensesByCategory(transactions, curKeySet, 1);
+    const monthTxCount = ledger.filter((t) => curKeySet.has(t.date.slice(0, 7))).length;
+    const monthCategories = expensesByCategory(ledger, curKeySet, 1);
     const dayOfMonth = new Date().getDate();
+
+    const cardSummary = creditCardInvoiceSummary(
+      ledger,
+      settings.creditCardClosingDay ?? 3,
+      settings.creditCardDueDay ?? 10,
+    );
+    const fixedTotal = fixedBillsTotalCents(bills);
+    const commitmentRatio = incomeCommitmentRatio(fixedTotal, cardSummary.currentInvoiceCents, cur.incomeCents);
 
     return {
       cur,
@@ -73,11 +90,14 @@ export function DashboardView({ onGoManage, onOpenSettings }: { onGoManage: () =
       topCategory: monthCategories.length > 0 ? { name: monthCategories[0].category, totalCents: monthCategories[0].totalCents } : null,
       avgDailyExpense: Math.round(cur.expenseCents / dayOfMonth),
       savings: savingsRate(cur.incomeCents, cur.expenseCents),
+      cardSummary,
+      fixedTotal,
+      commitmentRatio,
     };
-  }, [transactions, investments, settings.initialBalanceCents, periodMonths]);
+  }, [transactions, bills, investments, settings, periodMonths]);
 
   const periodLabel = PERIOD_OPTIONS.find((p) => p.value === periodMonths)?.label ?? '';
-  const empty = transactions.length === 0 && investments.length === 0;
+  const empty = transactions.length === 0 && investments.length === 0 && bills.every((b) => !b.active);
   const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date());
 
   return (
@@ -156,6 +176,24 @@ export function DashboardView({ onGoManage, onOpenSettings }: { onGoManage: () =
         </Card>
       ) : (
         <>
+          {/* Fatura do Cartão e Comprometimento de Renda */}
+          <div className="grid gap-4 md:grid-cols-2 sm:gap-5">
+            <CreditCardInvoiceCard
+              summary={computed.cardSummary}
+              closingDay={settings.creditCardClosingDay ?? 3}
+              dueDay={settings.creditCardDueDay ?? 10}
+              onOpenSettings={onOpenSettings}
+              delay={40}
+            />
+            <CommitmentCard
+              fixedCents={computed.fixedTotal}
+              cardCents={computed.cardSummary.currentInvoiceCents}
+              incomeCents={computed.cur.incomeCents}
+              ratioPct={computed.commitmentRatio}
+              delay={50}
+            />
+          </div>
+
           {/* Seletor de período */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-muted">Análise do período</h2>
@@ -216,12 +254,15 @@ export function DashboardView({ onGoManage, onOpenSettings }: { onGoManage: () =
             </div>
           </div>
 
-          {/* Linha 3: recentes + investimentos */}
+          {/* Linha 3: recentes + contas fixas + investimentos */}
           <div className="grid gap-4 lg:grid-cols-12 sm:gap-5">
-            <div className="lg:col-span-6">
+            <div className="lg:col-span-4">
               <RecentList transactions={transactions} onGoManage={onGoManage} delay={100} />
             </div>
-            <div className="lg:col-span-6">
+            <div className="lg:col-span-4">
+              <FixedBillsPanel bills={bills} delay={130} />
+            </div>
+            <div className="lg:col-span-4">
               <InvestmentsPanel investments={investments} summary={computed.inv} delay={160} />
             </div>
           </div>

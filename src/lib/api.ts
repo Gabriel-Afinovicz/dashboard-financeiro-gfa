@@ -1,8 +1,9 @@
-import type { Investment, Settings, Transaction } from '../types';
+import type { FixedBill, Investment, Settings, Transaction } from '../types';
 import { getToken, setToken } from './authToken';
 
 export type TransactionInput = Omit<Transaction, 'id' | 'createdAt'>;
 export type InvestmentInput = Omit<Investment, 'id' | 'createdAt'>;
+export type FixedBillInput = Omit<FixedBill, 'id' | 'createdAt'>;
 
 export interface RemoteData {
   transactions: Transaction[];
@@ -80,6 +81,13 @@ export const api = {
   updateInvestment: (id: string, input: InvestmentInput) =>
     request<Investment>(`/investments/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
   deleteInvestment: (id: string) => request<{ ok: true }>(`/investments/${id}`, { method: 'DELETE' }),
+
+  getFixedBills: () => request<FixedBill[]>('/fixed-bills'),
+  createFixedBill: (input: FixedBillInput) =>
+    request<FixedBill>('/fixed-bills', { method: 'POST', body: JSON.stringify(input) }),
+  updateFixedBill: (id: string, input: FixedBillInput) =>
+    request<FixedBill>(`/fixed-bills/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
+  deleteFixedBill: (id: string) => request<{ ok: true }>(`/fixed-bills/${id}`, { method: 'DELETE' }),
 
   getSettings: () => request<Partial<Settings> | null>('/settings'),
   saveSettings: (settings: Settings) =>

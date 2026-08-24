@@ -7,6 +7,7 @@ import { DashboardView } from './components/dashboard/DashboardView';
 import { ManageView } from './components/manage/ManageView';
 import { SettingsPanel } from './components/settings/SettingsPanel';
 import { DataProvider, useData } from './store/DataContext';
+import { FixedBillsProvider } from './store/FixedBillsContext';
 import { useAuth } from './store/AuthContext';
 import { btnPrimary } from './components/ui/controls';
 
@@ -26,7 +27,9 @@ export default function App() {
   // Os dados só são carregados depois do login
   return (
     <DataProvider>
-      <AppShell />
+      <FixedBillsProvider>
+        <AppShell />
+      </FixedBillsProvider>
     </DataProvider>
   );
 }

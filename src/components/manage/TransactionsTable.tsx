@@ -218,6 +218,7 @@ export function TransactionsTable({ onEdit }: { onEdit: (t: Transaction) => void
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <span className="rounded-md border border-line px-1.5 py-0.5 text-[11px] text-muted">
                         {METHOD_SHORT[t.method]}
+                        {t.installmentsCount && t.installmentsCount > 1 ? ` (${t.currentInstallment ?? 1}/${t.installmentsCount})` : ''}
                       </span>
                     </td>
                     <td className={`px-3 py-2.5 text-right font-semibold whitespace-nowrap tabular-nums ${income ? 'text-pos' : 'text-neg'}`}>
