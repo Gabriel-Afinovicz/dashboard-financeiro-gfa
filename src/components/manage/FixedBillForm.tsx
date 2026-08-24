@@ -4,8 +4,9 @@ import type { FixedBill, PaymentMethod } from '../../types';
 import { useFixedBills } from '../../store/FixedBillsContext';
 import { useToast } from '../../store/ToastContext';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../../lib/categories';
-import { currencyToCents, formatBRL, maskCurrency, todayISO } from '../../lib/format';
-import { calculateEffectiveUsdRate, useUsdRate } from '../../lib/currency';
+import { currencyToCents, formatDateBR, formatBRL, maskCurrency, todayISO } from '../../lib/format';
+import { calculateEffectiveUsdRate, useUsdRateForDate } from '../../lib/currency';
+import { occurrenceDate } from '../../lib/fixedBills';
 import { useSettings } from '../../store/SettingsContext';
 import { validateFixedBill, type Errors, type FixedBillFormValues } from '../../lib/validate';
 import { Card, CardTitle, Field, MoneyInput, SelectInput, TextInput, btnGhost, btnPrimary } from '../ui/controls';
@@ -23,7 +24,6 @@ export const FixedBillForm = forwardRef<HTMLElement, Props>(function FixedBillFo
 ) {
   const { addBill, updateBill } = useFixedBills();
   const { push } = useToast();
-  const { usdRate } = useUsdRate();
   const { settings } = useSettings();
 
   const [description, setDescription] = useState('');
@@ -33,6 +33,10 @@ export const FixedBillForm = forwardRef<HTMLElement, Props>(function FixedBillFo
   const [category, setCategory] = useState<string>('Contas');
   const [method, setMethod] = useState<PaymentMethod>('boleto');
   const [errors, setErrors] = useState<Errors<FixedBillFormValues>>({});
+
+  const now = new Date();
+  const targetFormDate = occurrenceDate(now.getFullYear(), now.getMonth(), Number(dayOfMonth));
+  const { usdRate } = useUsdRateForDate(targetFormDate);
 
   const effectiveRate = calculateEffectiveUsdRate(
     usdRate,
@@ -203,10 +207,10 @@ export const FixedBillForm = forwardRef<HTMLElement, Props>(function FixedBillFo
             <Globe className="h-4 w-4 shrink-0 text-accent" />
             <div>
               <span className="font-semibold text-fg">
-                Valor estimado na fatura: {formatBRL(convertedBrl)}
+                Valor estimado para o dia {formatDateBR(targetFormDate)}: {formatBRL(convertedBrl)}
               </span>
               <span className="ml-1 text-faint">
-                (Dólar R$ {usdRate.toFixed(2)} + {settings.cardSpreadPct ?? 5.5}% Spread + {settings.cardIofPct ?? 4.38}% IOF = R$ {effectiveRate.toFixed(2)}/USD)
+                (Dólar R$ {usdRate.toFixed(2)} na data {formatDateBR(targetFormDate)} + {settings.cardSpreadPct ?? 5.5}% Spread + {settings.cardIofPct ?? 4.38}% IOF = R$ {effectiveRate.toFixed(2)}/USD)
               </span>
             </div>
           </div>

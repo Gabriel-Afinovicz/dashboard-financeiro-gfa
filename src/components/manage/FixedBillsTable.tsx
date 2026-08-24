@@ -3,7 +3,8 @@ import { CalendarClock, Pencil, Trash2 } from 'lucide-react';
 import type { FixedBill } from '../../types';
 import { useFixedBills } from '../../store/FixedBillsContext';
 import { useToast } from '../../store/ToastContext';
-import { useMoney } from '../../store/SettingsContext';
+import { useMoney, useSettings } from '../../store/SettingsContext';
+import { calculateEffectiveUsdRate, useHistoricalUsdRates } from '../../lib/currency';
 import { METHOD_SHORT } from '../../lib/categories';
 import { occurrenceDate } from '../../lib/fixedBills';
 import { todayISO } from '../../lib/format';
@@ -13,6 +14,7 @@ export function FixedBillsTable({ onEdit }: { onEdit: (bill: FixedBill) => void 
   const { bills, deleteBill, toggleBill } = useFixedBills();
   const { push } = useToast();
   const { money } = useMoney();
+  const { settings } = useSettings();
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -25,14 +27,34 @@ export function FixedBillsTable({ onEdit }: { onEdit: (bill: FixedBill) => void 
   const [year, month] = today.split('-').map(Number);
   const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date());
 
+  const occurrenceDates = useMemo(
+    () => bills.map((b) => occurrenceDate(year, month - 1, b.dayOfMonth)),
+    [bills, year, month],
+  );
+  const rawRates = useHistoricalUsdRates(occurrenceDates);
+
+  const getEffectiveRateForBill = (bill: FixedBill) => {
+    const dueIso = occurrenceDate(year, month - 1, bill.dayOfMonth);
+    const baseRate = rawRates[dueIso] ?? 5.65;
+    return calculateEffectiveUsdRate(baseRate, settings.cardSpreadPct ?? 5.5, settings.cardIofPct ?? 4.38);
+  };
+
   const rows = useMemo(
     () => [...bills].sort((a, b) => a.dayOfMonth - b.dayOfMonth || a.description.localeCompare(b.description)),
     [bills],
   );
 
   const monthlyTotal = useMemo(
-    () => bills.reduce((acc, bill) => (bill.active ? acc + bill.amountCents : acc), 0),
-    [bills],
+    () =>
+      bills.reduce((acc, bill) => {
+        if (!bill.active) return acc;
+        if (bill.currency === 'USD' && bill.amountCentsUSD) {
+          const rate = getEffectiveRateForBill(bill);
+          return acc + Math.round(bill.amountCentsUSD * rate);
+        }
+        return acc + bill.amountCents;
+      }, 0),
+    [bills, rawRates, settings],
   );
 
   return (
@@ -88,7 +110,7 @@ export function FixedBillsTable({ onEdit }: { onEdit: (bill: FixedBill) => void 
                         <div className="flex flex-col items-end">
                           <span>US$ {(bill.amountCentsUSD / 100).toFixed(2)}</span>
                           <span className="text-[11px] font-normal text-muted">
-                            (≈ {money(bill.amountCents)})
+                            (≈ {money(Math.round(bill.amountCentsUSD * getEffectiveRateForBill(bill)))})
                           </span>
                         </div>
                       ) : (

@@ -85,6 +85,29 @@ export async function fetchUsdRateForDate(isoDate: string): Promise<number> {
   return fallback;
 }
 
+/** Hook que busca a cotação do dólar para uma data específica (yyyy-mm-dd). */
+export function useUsdRateForDate(isoDate: string): { usdRate: number; loading: boolean } {
+  const [usdRate, setUsdRate] = useState<number>(cachedRate?.rate ?? DEFAULT_FALLBACK_RATE);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    let active = true;
+    if (!isoDate) return;
+    setLoading(true);
+    fetchUsdRateForDate(isoDate).then((rate) => {
+      if (active) {
+        setUsdRate(rate);
+        setLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [isoDate]);
+
+  return { usdRate, loading };
+}
+
 /** Hook que busca e armazena cotações históricas para uma lista de datas ISO. */
 export function useHistoricalUsdRates(dates: string[]): Record<string, number> {
   const [rates, setRates] = useState<Record<string, number>>({});
