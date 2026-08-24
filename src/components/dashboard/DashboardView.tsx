@@ -34,7 +34,7 @@ import { FixedBillsPanel } from './FixedBillsPanel';
 import { CreditCardInvoiceCard } from './CreditCardInvoiceCard';
 import { CommitmentCard } from './CommitmentCard';
 
-import { useUsdRate } from '../../lib/currency';
+import { calculateEffectiveUsdRate, useUsdRate } from '../../lib/currency';
 
 const PERIOD_OPTIONS: { value: number; label: string }[] = [
   { value: 3, label: '3 meses' },
@@ -50,8 +50,14 @@ export function DashboardView({ onGoManage, onOpenSettings }: { onGoManage: () =
   const { usdRate } = useUsdRate();
   const [periodMonths, setPeriodMonths] = useState(6);
 
+  const effectiveUsdRate = calculateEffectiveUsdRate(
+    usdRate,
+    settings.cardSpreadPct ?? 5.5,
+    settings.cardIofPct ?? 4.38,
+  );
+
   const computed = useMemo(() => {
-    const ledger = mergeWithFixedBills(transactions, bills, new Date(), usdRate);
+    const ledger = mergeWithFixedBills(transactions, bills, new Date(), effectiveUsdRate);
     const [prevKey, curKey] = lastMonthsKeys(2);
     const cur = monthSnapshot(ledger, curKey);
     const prev = monthSnapshot(ledger, prevKey);
@@ -76,7 +82,7 @@ export function DashboardView({ onGoManage, onOpenSettings }: { onGoManage: () =
       settings.creditCardClosingDay ?? 3,
       settings.creditCardDueDay ?? 10,
     );
-    const fixedTotal = fixedBillsTotalCents(bills, usdRate);
+    const fixedTotal = fixedBillsTotalCents(bills, effectiveUsdRate);
     const commitmentRatio = incomeCommitmentRatio(fixedTotal, cardSummary.currentInvoiceCents, cur.incomeCents);
 
     return {
@@ -97,7 +103,7 @@ export function DashboardView({ onGoManage, onOpenSettings }: { onGoManage: () =
       fixedTotal,
       commitmentRatio,
     };
-  }, [transactions, bills, investments, settings, periodMonths, usdRate]);
+  }, [transactions, bills, investments, settings, periodMonths, effectiveUsdRate]);
 
   const periodLabel = PERIOD_OPTIONS.find((p) => p.value === periodMonths)?.label ?? '';
   const empty = transactions.length === 0 && investments.length === 0 && bills.every((b) => !b.active);

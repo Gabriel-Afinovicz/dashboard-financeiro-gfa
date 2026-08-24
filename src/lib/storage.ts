@@ -15,6 +15,8 @@ export const DEFAULT_SETTINGS: Settings = {
   monthlyGoalCents: 100000,
   creditCardClosingDay: 3,
   creditCardDueDay: 10,
+  cardSpreadPct: 5.5,
+  cardIofPct: 4.38,
 };
 
 export function loadData(): DataStore | null {

@@ -96,4 +96,8 @@ export interface Settings {
   creditCardClosingDay: number;
   /** Dia de vencimento da fatura do cartão de crédito (1-31). */
   creditCardDueDay: number;
+  /** Percentual de Spread cobrado pelo banco em compras internacionais (ex: 5.5). */
+  cardSpreadPct: number;
+  /** Percentual de IOF federal para compras internacionais no cartão (ex: 4.38). */
+  cardIofPct: number;
 }

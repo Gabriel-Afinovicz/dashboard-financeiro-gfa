@@ -5,7 +5,8 @@ import { useFixedBills } from '../../store/FixedBillsContext';
 import { useToast } from '../../store/ToastContext';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../../lib/categories';
 import { currencyToCents, formatBRL, maskCurrency, todayISO } from '../../lib/format';
-import { useUsdRate } from '../../lib/currency';
+import { calculateEffectiveUsdRate, useUsdRate } from '../../lib/currency';
+import { useSettings } from '../../store/SettingsContext';
 import { validateFixedBill, type Errors, type FixedBillFormValues } from '../../lib/validate';
 import { Card, CardTitle, Field, MoneyInput, SelectInput, TextInput, btnGhost, btnPrimary } from '../ui/controls';
 
@@ -23,6 +24,7 @@ export const FixedBillForm = forwardRef<HTMLElement, Props>(function FixedBillFo
   const { addBill, updateBill } = useFixedBills();
   const { push } = useToast();
   const { usdRate } = useUsdRate();
+  const { settings } = useSettings();
 
   const [description, setDescription] = useState('');
   const [currency, setCurrency] = useState<'BRL' | 'USD'>('BRL');
@@ -31,6 +33,12 @@ export const FixedBillForm = forwardRef<HTMLElement, Props>(function FixedBillFo
   const [category, setCategory] = useState<string>('Contas');
   const [method, setMethod] = useState<PaymentMethod>('boleto');
   const [errors, setErrors] = useState<Errors<FixedBillFormValues>>({});
+
+  const effectiveRate = calculateEffectiveUsdRate(
+    usdRate,
+    settings.cardSpreadPct ?? 5.5,
+    settings.cardIofPct ?? 4.38,
+  );
 
   useEffect(() => {
     if (!editing) return;
@@ -71,7 +79,7 @@ export const FixedBillForm = forwardRef<HTMLElement, Props>(function FixedBillFo
     const rawCents = currencyToCents(amount);
     const isUSD = currency === 'USD';
     const amountCentsUSD = isUSD ? rawCents : undefined;
-    const amountCents = isUSD ? Math.round(rawCents * usdRate) : rawCents;
+    const amountCents = isUSD ? Math.round(rawCents * effectiveRate) : rawCents;
 
     const input = {
       description: values.description,
@@ -99,7 +107,7 @@ export const FixedBillForm = forwardRef<HTMLElement, Props>(function FixedBillFo
   };
 
   const parsedCents = currencyToCents(amount);
-  const convertedBrl = currency === 'USD' && parsedCents > 0 ? Math.round(parsedCents * usdRate) : 0;
+  const convertedBrl = currency === 'USD' && parsedCents > 0 ? Math.round(parsedCents * effectiveRate) : 0;
 
   return (
     <Card className="scroll-mt-20" delay={40}>
@@ -195,10 +203,10 @@ export const FixedBillForm = forwardRef<HTMLElement, Props>(function FixedBillFo
             <Globe className="h-4 w-4 shrink-0 text-accent" />
             <div>
               <span className="font-semibold text-fg">
-                Conversão estimada: {formatBRL(convertedBrl)}
+                Valor estimado na fatura: {formatBRL(convertedBrl)}
               </span>
               <span className="ml-1 text-faint">
-                (Cotação USD: R$ {usdRate.toFixed(2)} via AwesomeAPI em tempo real)
+                (Dólar R$ {usdRate.toFixed(2)} + {settings.cardSpreadPct ?? 5.5}% Spread + {settings.cardIofPct ?? 4.38}% IOF = R$ {effectiveRate.toFixed(2)}/USD)
               </span>
             </div>
           </div>

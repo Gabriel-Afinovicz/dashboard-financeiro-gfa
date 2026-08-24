@@ -47,3 +47,13 @@ export function useUsdRate(): { usdRate: number; loading: boolean } {
 
   return { usdRate, loading };
 }
+
+/**
+ * Calcula a taxa efetiva do dólar no cartão de crédito incluindo o Spread do banco e o IOF federal.
+ * Fórmula: Dólar Efetivo = Dólar Comercial * (1 + Spread%) * (1 + IOF%)
+ */
+export function calculateEffectiveUsdRate(baseRate: number, spreadPct = 5.5, iofPct = 4.38): number {
+  const withSpread = baseRate * (1 + spreadPct / 100);
+  const withIof = withSpread * (1 + iofPct / 100);
+  return withIof;
+}

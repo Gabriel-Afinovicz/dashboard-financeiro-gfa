@@ -7,7 +7,7 @@ import { useAuth } from '../../store/AuthContext';
 import { useFixedBills } from '../../store/FixedBillsContext';
 import { useToast } from '../../store/ToastContext';
 import { currencyToCents, maskCurrency, toISO } from '../../lib/format';
-import { Field, MoneyInput, Segmented, SelectInput, Switch, btnGhost, btnIcon } from '../ui/controls';
+import { Field, MoneyInput, Segmented, SelectInput, Switch, TextInput, btnGhost, btnIcon } from '../ui/controls';
 
 const DAYS_OF_MONTH = Array.from({ length: 31 }, (_, i) => i + 1);
 
@@ -264,6 +264,42 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
                   </SelectInput>
                 </Field>
               </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-line/50">
+                <Field label="Spread do Banco (%)" hint="Taxa do Itaú/banco (ex: 5.5)">
+                  <TextInput
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="30"
+                    value={String(settings.cardSpreadPct ?? 5.5)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      const val = parseFloat(e.target.value);
+                      if (!isNaN(val) && val >= 0) {
+                        update({ cardSpreadPct: val });
+                      }
+                    }}
+                  />
+                </Field>
+                <Field label="IOF Cartão (%)" hint="Imposto federal (ex: 4.38)">
+                  <TextInput
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="20"
+                    value={String(settings.cardIofPct ?? 4.38)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      const val = parseFloat(e.target.value);
+                      if (!isNaN(val) && val >= 0) {
+                        update({ cardIofPct: val });
+                      }
+                    }}
+                  />
+                </Field>
+              </div>
+              <p className="text-[11px] text-faint">
+                Usados para calcular o valor real descontado em compras e contas fixas em Dólar.
+              </p>
             </div>
           </section>
 
